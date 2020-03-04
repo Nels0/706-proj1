@@ -21,9 +21,20 @@
 */
 #include <Servo.h>  //Need for Servo pulse output
 
-//#define NO_READ_GYRO  //Uncomment of GYRO is not attached.
-//#define NO_HC-SR04 //Uncomment of HC-SR04 ultrasonic ranging sensor is not attached.
-//#define NO_BATTERY_V_OK //Uncomment of BATTERY_V_OK if you do not care about battery damage.
+  //Uncomment of GYRO is not attached.
+//#define NO_READ_GYRO
+
+//Uncomment of HC-SR04 ultrasonic ranging sensor is not attached.
+#define NO_HC_SR04
+
+//Uncomment of BATTERY_V_OK if you do not care about battery damage.
+//#define NO_BATTERY_V_OK
+
+/* ===============================================================
+ * NOTES =========================================================
+ * ===============================================================
+ * Ultrasonic sensor is uS / 58 = range in CM 
+ */
 
 //State machine states
 enum STATE {
@@ -61,6 +72,18 @@ int speed_change;
 //Serial Pointer
 HardwareSerial *SerialCom;
 
+// GYRO PARAMETERS
+int sensorPin = A2;                 //define the pin that gyro is connected
+int T = 100;                        // T is the time of one loop
+int sensorValue = 0;                // read out value of sensor
+float gyroSupplyVoltage = 5;        // supply voltage for gyro
+float gyroZeroVoltage = 0;          // the value of voltage when gyro is zero 
+float gyroSensitivity = 0.007;      // gyro sensitivity unit is (mv/degree/second) get from datasheet
+float rotationThreshold = 1.5;      // because of gyro drifting, defining rotation angular velocity less than this value will not be ignored
+float gyroRate = 0;                 // read out value of sensor in voltage
+float currentAngle = 0;             // current angle calculated by angular velocity integral on
+byte serialRead = 0;                // for serial print control
+
 int pos = 0;
 void setup(void)
 {
@@ -77,6 +100,8 @@ void setup(void)
   SerialCom->println("MECHENG706_Base_Code_25/01/2018");
   delay(1000);
   SerialCom->println("Setup....");
+
+  gyro_setup();
 
   delay(1000); //settling time but no really needed
 
@@ -128,7 +153,7 @@ STATE running() {
     GYRO_reading();
 #endif
 
-#ifndef NO_HC-SR04
+#ifndef NO_HC_SR04
     HC_SR04_range();
 #endif
 
@@ -268,7 +293,7 @@ boolean is_battery_voltage_OK()
 }
 #endif
 
-#ifndef NO_HC-SR04
+#ifndef NO_HC_SR04
 void HC_SR04_range()
 {
   unsigned long t1;
@@ -338,6 +363,7 @@ void GYRO_reading()
 {
   SerialCom->print("GYRO A3:");
   SerialCom->println(analogRead(A3));
+  gyro_loop();
 }
 #endif
 
@@ -481,7 +507,65 @@ void strafe_right ()
   right_font_motor.writeMicroseconds(1500 + speed_val);
 }
 
+void gyro_setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  // this section is initialize the sensor, find the the value of voltage when gyro is zero
+  int i;
+  float sum = 0;    
+  pinMode(sensorPin,INPUT);
+  
+  Serial.println("please keep the sensor still for calibration");
+  Serial.println("get the gyro zero voltage");
 
+  //  read 100 values of voltage when gyro is at still, to calculate the zero-drift
+  for (i=0; i<100; i++) {  
+    sensorValue = analogRead(sensorPin);  
+    sum += sensorValue;  
+    delay(5);
+  }
+  gyroZeroVoltage = sum/100;    // average the sum as the zero drifting
+}
 
+void gyro_loop() {
+  // put your main code here, to run repeatedly:
+  if (Serial.available()) { // Check for input from terminal
+    serialRead = Serial.read();     // Read input     
+    if (serialRead==49) {           // Check for flag to execute, 49 is asci for 1     
+      Serial.end();                 // end the serial communication to display the sensor data on monitor      
+    }   
+  }
+  // convert the 0-1023 signal to 0-5v
+  gyroRate = (analogRead(sensorPin)*gyroSupplyVoltage)/1023;
+  
+  // find the voltage offset the value of voltage when gyro is zero (still)
+  gyroRate -= (gyroZeroVoltage/1023*5);
+  
+  // read out voltage divided the gyro sensitivity to calculate the angular velocity 
+  float angularVelocity = gyroRate/ gyroSensitivity;
+  
+  // if the angular velocity is less than the threshold, ignore it
+  if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
+    // we are running a loop in T. one second will run (1000/T).  
+    float angleChange = angularVelocity/(1000/T); 
+    currentAngle += angleChange;   
+  }
+
+  // keep the angle between 0-360
+  if (currentAngle < 0)    
+  {
+    currentAngle += 360;
+  }  
+  else if (currentAngle > 359)
+  {
+    currentAngle -= 360;
+  }
+  Serial.print(angularVelocity);
+  Serial.print(" ");
+  Serial.println(currentAngle);// control the time per loopdelay (T);
+  
+  // control the time per loop
+  delay(T);
+}
 
 
