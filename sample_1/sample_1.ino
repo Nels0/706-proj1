@@ -101,9 +101,8 @@ void setup(void)
   delay(1000);
   SerialCom->println("Setup....");
 
+    delay(1000); //settling time but no really needed
   gyro_setup();
-
-  delay(1000); //settling time but no really needed
 
 }
 
@@ -361,8 +360,8 @@ void Analog_Range_A4()
 #ifndef NO_READ_GYRO
 void GYRO_reading()
 {
-  SerialCom->print("GYRO A3:");
-  SerialCom->println(analogRead(A3));
+  SerialCom->print("GYRO A2:");
+  SerialCom->println(analogRead(A2));
   gyro_loop();
 }
 #endif
@@ -509,7 +508,7 @@ void strafe_right ()
 
 void gyro_setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
+  Serial.begin(115200);
   // this section is initialize the sensor, find the the value of voltage when gyro is zero
   int i;
   float sum = 0;    
@@ -567,5 +566,3 @@ void gyro_loop() {
   // control the time per loop
   delay(T);
 }
-
-
