@@ -13,10 +13,18 @@ enum STATE {
 //Serial Pointer
 HardwareSerial *SerialCom;
 
+//Uncomment of GYRO is not attached.
+//#define NO_READ_GYRO
+
+//Uncomment of GYRO is not attached.
+//#define NO_READ_INFRARED
+
+// Pins
+int gyroPin = A2;                 //define the pin that gyro is connected
+int lrInfraredPin = A6;
 
 // GYRO PARAMETERS
-int gyroPin = A2;                 //define the pin that gyro is connected
-int T = 100;                        // T is the time of one loop
+int T = 10;                        // T is the time of one loop
 int gyroValue = 0;                // read out value of sensor
 float gyroSupplyVoltage = 5;        // supply voltage for gyro
 float gyroZeroVoltage = 0;          // the value of voltage when gyro is zero 
@@ -36,13 +44,8 @@ void setup() {
   SerialCom->println("MECHENG706_Base_Code_25/01/2018");
   delay(1000);
   SerialCom->println("Setup....");
-    delay(1000); //settling time but no really needed
-
-
-
-    gyro_setup();
-
-
+  delay(1000); //settling time but no really needed
+  gyro_setup();
 }
 
 void loop() {
@@ -61,7 +64,6 @@ void loop() {
       machine_state =  stopped();
       break;
   };
-
 }
 
 STATE initialising() {
@@ -75,6 +77,10 @@ STATE initialising() {
 STATE running() {
   #ifndef NO_READ_GYRO
     GYRO_reading();
+  #endif
+
+  #ifndef NO_READ_INFRARED
+    INFRARED_reading();
   #endif
 
   #ifndef NO_BATTERY_V_OK
@@ -217,6 +223,17 @@ void GYRO_reading()
   Serial.print(angularVelocity);
   Serial.print(" Current Angle: ");
   Serial.println(currentAngle);// control the time per loopdelay (T);
+
+  delay(T);
+  
+}
+#endif
+
+#ifndef NO_READ_INFRARED
+void INFRARED_reading()
+{
+  Serial.print("LR Infrared: ");
+  Serial.println(analogRead(lrInfraredPin));
   
 }
 #endif

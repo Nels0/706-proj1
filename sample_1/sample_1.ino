@@ -507,8 +507,6 @@ void strafe_right ()
 }
 
 void gyro_setup() {
-  // put your setup code here, to run once:
-  Serial.begin(115200);
   // this section is initialize the sensor, find the the value of voltage when gyro is zero
   int i;
   float sum = 0;    
