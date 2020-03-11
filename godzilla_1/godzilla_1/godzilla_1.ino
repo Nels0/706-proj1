@@ -35,8 +35,7 @@ int lrIRPin = A6;
 // =========================================================================
 // Variables
 
-static DEBUG debug_level = NONE;
-int T = 10;
+DEBUG debug_level = NONE;
 
 // Gyro variables
 int gyroValue = 0;
@@ -53,6 +52,7 @@ float currentAngle = 0;
 
 // Other
 HardwareSerial *SerialCom;
+int loopTime = 100;
 
 // =========================================================================
 // Setup function
@@ -68,7 +68,6 @@ void setup() {
   SerialCom->println("Setup....");
   delay(1000);
 
-  
   GYRO_setup();
   IR_setup();
 }
@@ -82,7 +81,6 @@ void loop() {
       machine_state = initialising();
       break;
     case RUNNING:
-      GYRO_reading();
       machine_state =  running();
       break;
     case STOPPED:
@@ -101,8 +99,14 @@ RUNNING_STATE initialising() {
 }
 
 RUNNING_STATE running() {
-  GYRO_reading();
-  IR_reading();
+  // TODO - add millis() here to get the time since the program has started.
+  // TODO - timeSinceLastTick += someTime?
+  if (timeSinceLastTick >= loopTime) {
+    timeSinceLastTick -= loopTime;
+    GYRO_reading(timeSinceLastTick);
+    IR_reading();
+    
+  }
   if (!is_battery_voltage_OK()) return STOPPED;
   return RUNNING;
 }
@@ -166,14 +170,14 @@ void GYRO_setup() {
   Serial.println("Gyro Calibrated!");
 }
 
-void GYRO_reading() {
+void GYRO_reading(int timeSinceLastTick) {
   gyroRate = (analogRead(gyroPin)*gyroSupplyVoltage)/1023;
   gyroRate -= (gyroZeroVoltage/1023*5);
   float angularVelocity = gyroRate/ gyroSensitivity;
   
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
     // we are running a loop in T. one second will run (1000/T).  
-    float angleChange = angularVelocity/(1000/T); 
+    float angleChange = angularVelocity/(1000/timeSinceLastTick); 
     currentAngle += angleChange;   
   }
 
@@ -187,10 +191,8 @@ void GYRO_reading() {
     Serial.print(" Angular Velocity: ");
     Serial.print(angularVelocity);
     Serial.print(" Current Angle: ");
-    Serial.println(currentAngle);// control the time per loopdelay (T);
+    Serial.println(currentAngle);
    #endif
-
-   delay(T);
 }
 
 // =========================================================================
