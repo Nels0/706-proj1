@@ -219,10 +219,10 @@ void GYRO_reading()
     currentAngle -= 360;
   }
   
-  Serial.print("Angular Velocity: ");
+  Serial.print(" Angular Velocity: ");
   Serial.print(angularVelocity);
   Serial.print(" Current Angle: ");
-  Serial.println(currentAngle);// control the time per loopdelay (T);
+  Serial.print(currentAngle);// control the time per loopdelay (T);
 
   delay(T);
   
@@ -232,7 +232,7 @@ void GYRO_reading()
 #ifndef NO_READ_INFRARED
 void INFRARED_reading()
 {
-  Serial.print("LR Infrared: ");
+  Serial.print(" LR Infrared: ");
   Serial.println(analogRead(lrInfraredPin));
   
 }
