@@ -1,6 +1,6 @@
 //Uncomment of BATTERY_V_OK if you do not care about battery damage.
 //#define NO_BATTERY_V_OK
-//#define GYRO_DEBUG
+#define GYRO_DEBUG
 //#define LR_IR_DEBUG
 //#define SR_IR_DEBUG
 //#defing MOTOR_DEBUG
@@ -36,7 +36,7 @@ int lrIRPin = A6;
 // Variables
 
 static DEBUG debug_level = NONE;
-
+int T = 10;
 
 // Gyro variables
 int gyroValue = 0;
@@ -82,6 +82,7 @@ void loop() {
       machine_state = initialising();
       break;
     case RUNNING:
+      GYRO_reading();
       machine_state =  running();
       break;
     case STOPPED:
@@ -166,15 +167,30 @@ void GYRO_setup() {
 }
 
 void GYRO_reading() {
-  // TODO
-
- #ifdef GYRO_DEBUG
-  Serial.print(" Angular Velocity: ");
-  Serial.print(angularVelocity);
-  Serial.print(" Current Angle: ");
-  Serial.print(currentAngle);// control the time per loopdelay (T);
- #endif
+  gyroRate = (analogRead(gyroPin)*gyroSupplyVoltage)/1023;
+  gyroRate -= (gyroZeroVoltage/1023*5);
+  float angularVelocity = gyroRate/ gyroSensitivity;
   
+  if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
+    // we are running a loop in T. one second will run (1000/T).  
+    float angleChange = angularVelocity/(1000/T); 
+    currentAngle += angleChange;   
+  }
+
+  // keep the angle between 0-360
+  if (currentAngle < 0)    
+    currentAngle += 360;
+  else if (currentAngle > 359)
+    currentAngle -= 360;
+
+  #ifdef GYRO_DEBUG
+    Serial.print(" Angular Velocity: ");
+    Serial.print(angularVelocity);
+    Serial.print(" Current Angle: ");
+    Serial.println(currentAngle);// control the time per loopdelay (T);
+   #endif
+
+   delay(T);
 }
 
 // =========================================================================
