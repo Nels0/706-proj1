@@ -53,6 +53,8 @@ float currentAngle = 0;
 // Other
 HardwareSerial *SerialCom;
 int loopTime = 100;
+int timeAtlastLoop = 0;
+int currentLoopTime = 0;
 
 // =========================================================================
 // Setup function
@@ -99,13 +101,13 @@ RUNNING_STATE initialising() {
 }
 
 RUNNING_STATE running() {
-  // TODO - add millis() here to get the time since the program has started.
-  // TODO - timeSinceLastTick += someTime?
-  if (timeSinceLastTick >= loopTime) {
-    timeSinceLastTick -= loopTime;
-    GYRO_reading(timeSinceLastTick);
+  int timeAtThisLoop = millis();
+  int deltaTime = timeAtThisLoop - timeAtlastLoop;
+  currentLoopTime += deltaTime;
+  if (currentLoopTime >= loopTime) {
+    GYRO_reading(currentLoopTime);
     IR_reading();
-    
+    currentLoopTime -= loopTime;
   }
   if (!is_battery_voltage_OK()) return STOPPED;
   return RUNNING;
@@ -170,15 +172,15 @@ void GYRO_setup() {
   Serial.println("Gyro Calibrated!");
 }
 
-void GYRO_reading(int timeSinceLastTick) {
+void GYRO_reading(int currentLoopTime) {
   gyroRate = (analogRead(gyroPin)*gyroSupplyVoltage)/1023;
   gyroRate -= (gyroZeroVoltage/1023*5);
   float angularVelocity = gyroRate/ gyroSensitivity;
   
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
     // we are running a loop in T. one second will run (1000/T).  
-    float angleChange = angularVelocity/(1000/timeSinceLastTick); 
-    currentAngle += angleChange;   
+    float angleChange = angularVelocity/(1000/currentLoopTime); 
+    currentAngle += angleChange;
   }
 
   // keep the angle between 0-360
