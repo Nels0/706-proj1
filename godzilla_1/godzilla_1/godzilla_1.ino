@@ -53,8 +53,6 @@ float currentAngle = 0;
 // Other
 HardwareSerial *SerialCom;
 int loopTime = 100;
-int timeAtlastLoop = 0;
-int currentLoopTime = 0;
 
 // =========================================================================
 // Setup function
@@ -101,13 +99,13 @@ RUNNING_STATE initialising() {
 }
 
 RUNNING_STATE running() {
-  int timeAtThisLoop = millis();
-  int deltaTime = timeAtThisLoop - timeAtlastLoop;
-  currentLoopTime += deltaTime;
-  if (currentLoopTime >= loopTime) {
-    GYRO_reading(currentLoopTime);
+  
+  static unsigned long running_previous_millis;
+  unsigned int deltaTime = millis() - running_previous_millis;
+  if (deltaTime >= 100) {
+    GYRO_reading(deltaTime);
     IR_reading();
-    currentLoopTime -= loopTime;
+    running_previous_millis = millis();
   }
   if (!is_battery_voltage_OK()) return STOPPED;
   return RUNNING;
