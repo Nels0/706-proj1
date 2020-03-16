@@ -1,10 +1,12 @@
-//Uncomment of BATTERY_V_OK if you do not care about battery damage.
+// ========================================================================
+// Defines and includes
 //#define NO_BATTERY_V_OK
 #define GYRO_DEBUG
 #define IR_DEBUG 
 //#define LR_IR_DEBUG
 //#define SR_IR_DEBUG
-//#defing MOTOR_DEBUG
+//#define MOTOR_DEBUG
+#include <Servo.h>
 
 // =========================================================================
 // Enums
@@ -14,6 +16,7 @@ enum RUNNING_STATE {
   RUNNING,
   STOPPED
 };
+//coment
 
 enum ACTION_STATE {
   // TODO
@@ -32,6 +35,10 @@ int gyroPin = A2;
 int srIRFrontPin = A4;
 int srIRBackPin = A5;
 int lrIRPin = A6;
+const byte left_front = 46;
+const byte left_rear = 47;
+const byte right_rear = 50;
+const byte right_front = 51;
 
 // =========================================================================
 // Variables
@@ -56,9 +63,12 @@ float lrIRDistance;
 
 // Other
 HardwareSerial *SerialCom;
-int loopTime = 100;
-int timeAtlastLoop = 0;
-int currentLoopTime = 0;
+int loopTime = 10; // Time for each loop in ms
+Servo left_front_motor;
+Servo left_rear_motor;
+Servo right_rear_motor;
+Servo right_front_motor;
+int speed_val = 100;
 
 // =========================================================================
 // Setup function
@@ -98,22 +108,24 @@ void loop() {
 // =========================================================================
 // State machine functions
 RUNNING_STATE initialising() {
-  SerialCom->println("INITIALISING....");
+  SerialCom->println("INITIALISING...");
+  delay(1000);
+  SerialCom->println("Enabling motors...");
+  enable_motors();
   delay(1000);
   SerialCom->println("RUNNING STATE...");
   return RUNNING;
 }
 
 RUNNING_STATE running() {
-  int timeAtThisLoop = millis();
-  int deltaTime = timeAtThisLoop - timeAtlastLoop;
-  currentLoopTime += deltaTime;
-  if (currentLoopTime >= loopTime) {
-    GYRO_reading(currentLoopTime);
+  static unsigned long running_previous_millis;
+  unsigned int deltaTime = millis() - running_previous_millis;
+  if (deltaTime >= loopTime) {
+    GYRO_reading(deltaTime);
     SR_IR_front_reading();
     SR_IR_back_reading();
     LR_IR_reading(); 
-    currentLoopTime -= loopTime;
+    running_previous_millis = millis();
   }
   if (!is_battery_voltage_OK()) return STOPPED;
   return RUNNING;
@@ -133,7 +145,7 @@ RUNNING_STATE stopped() {
       counter_lipo_voltage_ok++;
       if (counter_lipo_voltage_ok > 10) { //Making sure lipo voltage is stable
         counter_lipo_voltage_ok = 0;
-        //enable_motors();
+        enable_motors();
         SerialCom->println("Lipo OK returning to RUN STATE");
         return RUNNING;
       }
@@ -212,6 +224,83 @@ void LR_IR_reading() {
 // =========================================================================
 // Motor functions
 // TODO
+void disable_motors()
+{
+  left_front_motor.detach();
+  left_rear_motor.detach();
+  right_rear_motor.detach();
+  right_front_motor.detach();
+
+  pinMode(left_front, INPUT);
+  pinMode(left_rear, INPUT);
+  pinMode(right_rear, INPUT);
+  pinMode(right_front, INPUT);
+}
+
+void enable_motors()
+{
+  left_front_motor.attach(left_front);
+  left_rear_motor.attach(left_rear);
+  right_rear_motor.attach(right_rear);
+  right_front_motor.attach(right_front);
+}
+
+void stop()
+{
+  left_front_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_front_motor.writeMicroseconds(1500);
+}
+
+void move_forward()
+{
+  left_front_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_front_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void move_backward()
+{
+  left_front_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_front_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void move_counter_clockwise()
+{
+  left_front_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_front_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void move_clockwise()
+{
+  left_front_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_front_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void move_sideways_left()
+{
+  left_front_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_front_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void move_sideways_right()
+{
+  left_front_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_front_motor.writeMicroseconds(1500 + speed_val);
+}
+
 
 // =========================================================================
 //Gyro Functions
