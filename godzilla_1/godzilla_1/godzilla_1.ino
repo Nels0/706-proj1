@@ -47,8 +47,11 @@ float gyroRate = 0;
 float currentAngle = 0;
 
 // Short range IR
+float srIRFrontDistance;
+float srIRBackDistance;
 
 // Long range IR
+float lrIRDistance;
 
 // Other
 HardwareSerial *SerialCom;
@@ -142,12 +145,58 @@ RUNNING_STATE stopped() {
 // =========================================================================
 // IR functions
 void IR_setup() {
-  // TODO
+  pinMode(srIRFrontPin,INPUT); 
+  pinMode(srIRBackPin,INPUT); 
+  pinMode(lrIRPin,INPUT); 
+  Serial.println("...");
+
+  // TODO: Callibration for all IR sensors, consecutively 
+
+  Serial.println("IR Calibrated!");
 }
 
-void IR_reading() {
-  // TODO
+void SR_IR_front_reading() {
+  srIRFrontDistance = 1/analogRead(srIRFrontPin) - 0.42;
+
+  srIRFrontDistanceFiltered = IR_Moving_Average(srIRFrontDistance, 0);
+
+  #ifdef IR_DEBUG
+    Serial.print("SR Front Distance: ");
+    Serial.print(srIRFrontDistanceFiltered);
+  #endif
 }
+
+void SR_IR_back_reading() {
+  srIRBackDistance = 1/analogRead(srIRBackPin) - 0.42;
+
+  srIRBackDistanceFiltered = IR_Moving_Average(srIRBackDistance, 1);
+
+   #ifdef IR_DEBUG
+    Serial.print("SR Back Distance: ");
+    Serial.print(srIRBackDistanceFiltered);
+  #endif
+}
+
+void LR_IR_reading() {
+  lrIRDistance = 1/analogRead(lrIRPin);
+
+  lrIRDistanceFiltered = IR_Moving_Average(lrIRDistance, 2);
+
+   #ifdef IR_DEBUG
+    Serial.print("LR Distance: ");
+    Serial.print(lrIRDistanceFiltered);
+  #endif
+}
+
+void IR_Moving_Average(float Distance, enum IRSensor) {
+
+  switch 
+    case LRIRFront:
+      
+  
+}
+
+  
 
 // =========================================================================
 // Motor functions
