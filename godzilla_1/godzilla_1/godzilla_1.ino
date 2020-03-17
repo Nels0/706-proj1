@@ -185,7 +185,7 @@ void SR_IR_front_reading() {
 }
 
 void SR_IR_back_reading() {
-  srIRFrontDistance = 448.35f * pow(analogRead(srIRBackPin), -0.593f);
+  srIRBackDistance = 448.35f * pow(analogRead(srIRBackPin), -0.593f);
 
 //  srIRBackDistanceFiltered = IR_Moving_Average(srIRBackDistance, 1);
 
