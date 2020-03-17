@@ -61,6 +61,9 @@ float srIRBackDistance;
 // Long range IR
 float lrIRDistance;
 
+//Sonar
+int sonarTimeUS;
+
 // Other
 HardwareSerial *SerialCom;
 int loopTime = 10; // Time for each loop in ms
@@ -219,7 +222,18 @@ void LR_IR_reading() {
 //  
 //}
 
+//==================================================================
+// Sonar Functions
+
+
+void sonar_setup(){
   
+}
+
+void sonar_reading(){
+
+  
+}
 
 // =========================================================================
 // Motor functions
