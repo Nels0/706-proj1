@@ -127,7 +127,7 @@ RUNNING_STATE running() {
     GYRO_reading(deltaTime);
     SR_IR_front_reading();
     SR_IR_back_reading();
-    LR_IR_reading(); 
+    //LR_IR_reading(); 
     running_previous_millis = millis();
   }
   if (!is_battery_voltage_OK()) return STOPPED;
@@ -174,24 +174,24 @@ void IR_setup() {
 }
 
 void SR_IR_front_reading() {
-  srIRFrontDistance = 1/analogRead(srIRFrontPin) - 0.42;
+  srIRFrontDistance = 448.35f * pow(analogRead(srIRFrontPin), -0.593f);
 
 //  srIRFrontDistanceFiltered = IR_Moving_Average(srIRFrontDistance, 0);
 
   #ifdef IR_DEBUG
-    Serial.print("SR Front Distance: ");
+    Serial.print(" SR Front Distance: ");
     Serial.print(srIRFrontDistance);
   #endif
 }
 
 void SR_IR_back_reading() {
-  srIRBackDistance = 1/analogRead(srIRBackPin) - 0.42;
+  srIRFrontDistance = 448.35f * pow(analogRead(srIRBackPin), -0.593f);
 
 //  srIRBackDistanceFiltered = IR_Moving_Average(srIRBackDistance, 1);
 
    #ifdef IR_DEBUG
-    Serial.print("SR Back Distance: ");
-    Serial.print(srIRBackDistance);
+    Serial.print(" SR Back Distance: ");
+    Serial.println(srIRBackDistance);
    #endif
 }
 
@@ -201,7 +201,7 @@ void LR_IR_reading() {
 //  lrIRDistanceFiltered = IR_Moving_Average(lrIRDistance, 2);
 
    #ifdef IR_DEBUG
-    Serial.print("LR Distance: ");
+    Serial.print(" LR Distance: ");
     Serial.print(lrIRDistance);
    #endif
 }
