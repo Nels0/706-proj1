@@ -4,7 +4,7 @@
 //#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
-//#define ROTATION_CONTROL_DEBUG
+#define ROTATION_CONTROL_DEBUG
 #include <Servo.h>
 
 // =========================================================================
@@ -72,6 +72,13 @@ float srIRBackFiltered = 0;
 
 //Sonar
 int sonarTimeUS;
+
+// Speed
+int L1 = 1;
+int L2 = 0;
+int Rw = 1;
+int maxSpeedValue = 200;
+int minSpeedValue = 5; 
 
 // Other
 HardwareSerial *SerialCom;
@@ -193,28 +200,22 @@ ACTION_STATE still() {
 
 ACTION_STATE move_forward() {
   float Wz = get_Wz();
-  // Vy = get_Vy(); - This is the Vy from the controller
+  float Vy = 0; // get_Vy();
   // Wz = get_Wz(); - This is the Wz from the controller
-  float Vx = 0;
-  float Vy = 0;
-  
-  int L1 = 1;
-  int L2 = 0;
-  int Rw = 1;
+  float Vx = 0; 
 
   int motor_speed_1 = (int)((Vx + Vy - Wz*(L1 + L2)) / Rw);
   int motor_speed_2 = (int)((Vx - Vy + Wz*(L1 + L2)) / Rw);
   int motor_speed_3 = (int)((Vx - Vy - Wz*(L1 + L2)) / Rw);
   int motor_speed_4 = (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
 
-  int maxSpeedValue = 200;
-
-  motor_speed_1 = clamp(motor_speed_1, -maxSpeedValue, maxSpeedValue);
-  motor_speed_2 = clamp(motor_speed_2, -maxSpeedValue, maxSpeedValue);
-  motor_speed_3 = clamp(motor_speed_3, -maxSpeedValue, maxSpeedValue);
-  motor_speed_4 = clamp(motor_speed_4, -maxSpeedValue, maxSpeedValue);
+  motor_speed_1 = clamp(motor_speed_1, maxSpeedValue, minSpeedValue);
+  motor_speed_2 = clamp(motor_speed_2, maxSpeedValue, minSpeedValue);
+  motor_speed_3 = clamp(motor_speed_3, maxSpeedValue, minSpeedValue);
+  motor_speed_4 = clamp(motor_speed_4, maxSpeedValue, minSpeedValue);
 
   #ifdef ROTATION_CONTROL_DEBUG
+    Serial.print(Vy);
     Serial.print(" 1: ");
     Serial.print(motor_speed_1);
     Serial.print(" 2: ");
@@ -225,28 +226,43 @@ ACTION_STATE move_forward() {
     Serial.println(motor_speed_4);
   #endif
 
-  left_front_motor.writeMicroseconds(1500 - motor_speed_1);
-  right_front_motor.writeMicroseconds(1500 + motor_speed_2);
-  left_rear_motor.writeMicroseconds(1500 - motor_speed_3);
-  right_rear_motor.writeMicroseconds(1500 + motor_speed_4);
+  left_front_motor.writeMicroseconds(1500 + motor_speed_1);
+  right_front_motor.writeMicroseconds(1500 - motor_speed_2);
+  left_rear_motor.writeMicroseconds(1500 + motor_speed_3);
+  right_rear_motor.writeMicroseconds(1500 - motor_speed_4);
   
   return MOVING_FORWARD;
 }
 
-int get_Wz() {
+float get_Wz() {
    float r = 0;
-   float IRdifference = srIRFrontFiltered - srIRBackFiltered;
+   float IRdifference = srIRBackFiltered - srIRFrontFiltered;
    float controlDifference = r - IRdifference;
    return controlDifference * 25;
 }
 
-int clamp(int value, int minValue, int maxValue) {
-  if (value < minValue)
-    return minValue;
+float get_Vy() {
+   float r = 15;
+   float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
+   float controlDifference = r - IRSetDistanceDifference;
+   // Estimate K
+   return controlDifference * 15; 
+}
+
+int clamp(int value, int maxValue, int minValue) {
+  if (value < -maxValue)
+    return -maxValue;
   else if (value > maxValue)
     return maxValue;
   else
     return value;
+
+  if (value < minValue)
+    return 0;
+  else if (value > -minValue) 
+    return 0;
+  else 
+    return value; 
 }
 
 // =========================================================================
