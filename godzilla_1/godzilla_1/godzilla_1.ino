@@ -2,10 +2,9 @@
 // Defines and includes
 //#define NO_BATTERY_V_OK
 //#define GYRO_DEBUG
-#define IR_DEBUG 
-//#define LR_IR_DEBUG
-//#define SR_IR_DEBUG
+//#define IR_DEBUG 
 //#define MOTOR_DEBUG
+//#define ROTATION_CONTROL_DEBUG
 #include <Servo.h>
 
 // =========================================================================
@@ -19,7 +18,9 @@ enum RUNNING_STATE {
 //coment
 
 enum ACTION_STATE {
-  // TODO
+  MOVING_FORWARD,
+  MOVING_TURNING,
+  STILL
 };
 
 enum DEBUG {
@@ -130,6 +131,7 @@ RUNNING_STATE initialising() {
 
 RUNNING_STATE running() {
   static unsigned long running_previous_millis;
+  static ACTION_STATE action_state = STILL;
   unsigned int deltaTime = millis() - running_previous_millis;
   
   if (deltaTime >= loopTime) {
@@ -139,6 +141,19 @@ RUNNING_STATE running() {
     //LR_IR_reading(); 
     running_previous_millis = millis();
   }
+
+  switch (action_state) {
+    case MOVING_FORWARD:
+      move_forward();
+      break;
+    case MOVING_TURNING:
+      //move_turning(); - TODO
+      break;
+    case STILL:
+      still();
+      break;
+  }
+  
   if (!is_battery_voltage_OK()) return STOPPED;
   return RUNNING;
 }
@@ -167,6 +182,71 @@ RUNNING_STATE stopped() {
     }
   }
   return STOPPED;
+}
+
+ACTION_STATE still() {
+  left_front_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_front_motor.writeMicroseconds(1500);
+}
+
+ACTION_STATE move_forward() {
+  float Wz = get_Wz();
+  // Vy = get_Vy(); - This is the Vy from the controller
+  // Wz = get_Wz(); - This is the Wz from the controller
+  float Vx = 0;
+  float Vy = 0;
+  
+  int L1 = 1;
+  int L2 = 0;
+  int Rw = 1;
+
+  int motor_speed_1 = (int)((Vx + Vy - Wz*(L1 + L2)) / Rw);
+  int motor_speed_2 = (int)((Vx - Vy + Wz*(L1 + L2)) / Rw);
+  int motor_speed_3 = (int)((Vx - Vy - Wz*(L1 + L2)) / Rw);
+  int motor_speed_4 = (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
+
+  int maxSpeedValue = 200;
+
+  motor_speed_1 = clamp(motor_speed_1, -maxSpeedValue, maxSpeedValue);
+  motor_speed_2 = clamp(motor_speed_2, -maxSpeedValue, maxSpeedValue);
+  motor_speed_3 = clamp(motor_speed_3, -maxSpeedValue, maxSpeedValue);
+  motor_speed_4 = clamp(motor_speed_4, -maxSpeedValue, maxSpeedValue);
+
+  #ifdef ROTATION_CONTROL_DEBUG
+    Serial.print(" 1: ");
+    Serial.print(motor_speed_1);
+    Serial.print(" 2: ");
+    Serial.print(motor_speed_2);
+    Serial.print(" 3: ");
+    Serial.print(motor_speed_3);
+    Serial.print(" 4: ");
+    Serial.println(motor_speed_4);
+  #endif
+
+  left_front_motor.writeMicroseconds(1500 - motor_speed_1);
+  right_front_motor.writeMicroseconds(1500 + motor_speed_2);
+  left_rear_motor.writeMicroseconds(1500 - motor_speed_3);
+  right_rear_motor.writeMicroseconds(1500 + motor_speed_4);
+  
+  return MOVING_FORWARD;
+}
+
+int get_Wz() {
+   float r = 0;
+   float IRdifference = srIRFrontFiltered - srIRBackFiltered;
+   float controlDifference = r - IRdifference;
+   return controlDifference * 25;
+}
+
+int clamp(int value, int minValue, int maxValue) {
+  if (value < minValue)
+    return minValue;
+  else if (value > maxValue)
+    return maxValue;
+  else
+    return value;
 }
 
 // =========================================================================
@@ -282,6 +362,7 @@ void stop()
   right_front_motor.writeMicroseconds(1500);
 }
 
+/*
 void move_forward()
 {
   left_front_motor.writeMicroseconds(1500 + speed_val);
@@ -289,6 +370,7 @@ void move_forward()
   right_rear_motor.writeMicroseconds(1500 - speed_val);
   right_front_motor.writeMicroseconds(1500 - speed_val);
 }
+*/
 
 void move_backward()
 {
