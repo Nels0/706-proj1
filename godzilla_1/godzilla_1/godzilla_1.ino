@@ -1,7 +1,7 @@
 // ========================================================================
 // Defines and includes
 //#define NO_BATTERY_V_OK
-#define GYRO_DEBUG
+//#define GYRO_DEBUG
 #define IR_DEBUG 
 //#define LR_IR_DEBUG
 //#define SR_IR_DEBUG
@@ -55,11 +55,19 @@ float gyroRate = 0;
 float currentAngle = 0;
 
 // Short range IR
-float srIRFrontDistance;
-float srIRBackDistance;
+  // Front
+int numReadingsFront = 5; 
+float srIRFrontBuffer[5];
+int readIndexFront = 0;
+float sumFront = 0;              
+float srIRFrontFiltered = 0;   
 
-// Long range IR
-float lrIRDistance;
+  // Back
+int numReadingsBack = 5; 
+float srIRBackBuffer[5];
+int readIndexBack = 0;
+float sumBack = 0;              
+float srIRBackFiltered = 0; 
 
 //Sonar
 int sonarTimeUS;
@@ -100,7 +108,7 @@ void loop() {
       machine_state = initialising();
       break;
     case RUNNING:
-      machine_state =  running();
+      machine_state = running();
       break;
     case STOPPED:
       machine_state =  stopped();
@@ -123,6 +131,7 @@ RUNNING_STATE initialising() {
 RUNNING_STATE running() {
   static unsigned long running_previous_millis;
   unsigned int deltaTime = millis() - running_previous_millis;
+  
   if (deltaTime >= loopTime) {
     GYRO_reading(deltaTime);
     SR_IR_front_reading();
@@ -168,59 +177,65 @@ void IR_setup() {
   pinMode(lrIRPin,INPUT); 
   Serial.println("...");
 
-  // TODO: Callibration for all IR sensors, consecutively 
-
-  Serial.println("IR Calibrated!");
+  // Initialises all buffer values to zero 
+  for (int thisReading = 0; thisReading < numReadingsFront; thisReading++) {
+    srIRFrontBuffer[thisReading] = 0;
+  }
+  for (int thisReading = 0; thisReading < numReadingsBack; thisReading++) {
+    srIRBackBuffer[thisReading] = 0;
+  }
 }
 
 void SR_IR_front_reading() {
-  srIRFrontDistance = 448.35f * pow(analogRead(srIRFrontPin), -0.593f);
 
-//  srIRFrontDistanceFiltered = IR_Moving_Average(srIRFrontDistance, 0);
+  // subtract the last reading
+  sumFront = sumFront - srIRFrontBuffer[readIndexFront];
+
+  srIRFrontBuffer[readIndexFront] = 448.35f * pow(analogRead(srIRFrontPin), -0.593f);
+  // add the reading to the total
+  
+  sumFront = sumFront + srIRFrontBuffer[readIndexFront];
+  // advance to the next position in the array
+  readIndexFront = readIndexFront + 1;
+  // Reset index to zero when at end of array
+  if (readIndexFront >= numReadingsFront) {
+    readIndexFront = 0;
+  }
+
+  srIRFrontFiltered = sumFront / numReadingsFront;
 
   #ifdef IR_DEBUG
     Serial.print(" SR Front Distance: ");
-    Serial.print(srIRFrontDistance);
+    Serial.print(srIRFrontBuffer[readIndexFront]);
+    Serial.print(" SR Front Filtered Distance: ");
+    Serial.print(srIRFrontFiltered);
   #endif
 }
 
 void SR_IR_back_reading() {
-  srIRBackDistance = 448.35f * pow(analogRead(srIRBackPin), -0.593f);
 
-//  srIRBackDistanceFiltered = IR_Moving_Average(srIRBackDistance, 1);
+  // subtract the last reading
+  sumBack = sumBack - srIRBackBuffer[readIndexBack];
+  
+  // read from the sensor
+  srIRBackBuffer[readIndexBack] = 448.35f * pow(analogRead(srIRBackPin), -0.593f);
+  // add the reading to the total
+  sumBack = sumBack + srIRBackBuffer[readIndexBack];
+  // advance to the next position in the array
+  readIndexBack = readIndexBack + 1;
+  // Reset index to zero when at end of array
+  if (readIndexBack >= numReadingsBack) {
+    readIndexBack = 0;
+  }
+  srIRBackFiltered = sumBack / numReadingsBack;
 
-   #ifdef IR_DEBUG
+  #ifdef IR_DEBUG
     Serial.print(" SR Back Distance: ");
-    Serial.println(srIRBackDistance);
-   #endif
+    Serial.print(srIRBackBuffer[readIndexBack]);
+    Serial.print(" SR Back Filtered Distance: ");
+    Serial.println(srIRBackFiltered);
+  #endif
 }
-
-void LR_IR_reading() {
-  lrIRDistance = 1/analogRead(lrIRPin);
-
-//  lrIRDistanceFiltered = IR_Moving_Average(lrIRDistance, 2);
-
-   #ifdef IR_DEBUG
-    Serial.print(" LR Distance: ");
-    Serial.print(lrIRDistance);
-   #endif
-}
-
-//void IR_Moving_Average(float Distance, enum IRSensor) {
-//
-//  switch 
-//    case SRIRFront:
-//    
-//    break;
-//
-//    case SRIRBack:
-//    break;
-//
-//    case LRIR:
-//    break;
-//      
-//  
-//}
 
 //==================================================================
 // Sonar Functions
