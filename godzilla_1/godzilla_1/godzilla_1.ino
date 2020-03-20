@@ -225,7 +225,7 @@ ACTION_STATE move_turning() {
   float Vx = 0;
 
   //P controller that is usually saturated (maybe PD?)
-  Wz = -1 * clamp( angleError * rotationGain, 100, 0);
+  Wz = -clamp(angleError * rotationGain, 100, 0);
 
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
   int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
@@ -243,7 +243,7 @@ ACTION_STATE move_turning() {
 
 ACTION_STATE move_forward() {
   float Wz = get_Wz();
-  float Vy = get_Vy();
+  float Vy = -get_Vy(); // Negative to align itself with the LEFT wall
   float Vx = 0; 
 
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
@@ -273,7 +273,7 @@ ACTION_STATE move_forward() {
 
 float get_Wz() {
    float r = 0;
-   float IRdifference = srIRBackFiltered - srIRFrontFiltered;
+   float IRdifference = srIRFrontFiltered - srIRBackFiltered;
    float controlDifference = r - IRdifference;
    return controlDifference * rotationGain;
 }
@@ -413,10 +413,10 @@ int kinematic_calc(int Vx, int Vy, int Wz) {
 }
 
 void write_to_motors(int motor1, int motor2, int motor3, int motor4) {
-  left_front_motor.writeMicroseconds(1500 + clamp(motor1, maxSpeedValue, minSpeedValue));
-  right_front_motor.writeMicroseconds(1500 - clamp(motor2, maxSpeedValue, minSpeedValue));
-  left_rear_motor.writeMicroseconds(1500 + clamp(motor3, maxSpeedValue, minSpeedValue));
-  right_rear_motor.writeMicroseconds(1500 - clamp(motor4, maxSpeedValue, minSpeedValue));
+  left_front_motor.writeMicroseconds(1500 - clamp(motor1, maxSpeedValue, minSpeedValue));
+  right_front_motor.writeMicroseconds(1500 + clamp(motor2, maxSpeedValue, minSpeedValue));
+  left_rear_motor.writeMicroseconds(1500 - clamp(motor3, maxSpeedValue, minSpeedValue));
+  right_rear_motor.writeMicroseconds(1500 + clamp(motor4, maxSpeedValue, minSpeedValue));
 }
 
 void stop()
@@ -451,7 +451,7 @@ void GYRO_reading(int currentLoopTime) {
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
     // we are running a loop in T. one second will run (1000/T).  
     float angleChange = angularVelocity/(1000/currentLoopTime); 
-    currentAngle += angleChange;
+    currentAngle -= angleChange; // Negative due to right handed coordinate system
   }
 
   // keep the angle between 0-360
