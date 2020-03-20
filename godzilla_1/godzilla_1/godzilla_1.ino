@@ -1,7 +1,7 @@
 // ========================================================================
 // Defines and includes
 //#define NO_BATTERY_V_OK
-//#define GYRO_DEBUG
+#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
 #define ROTATION_CONTROL_DEBUG
@@ -54,6 +54,7 @@ float gyroSensitivity = 0.007;
 float rotationThreshold = 1.5;
 float gyroRate = 0;
 float currentAngle = 0;
+float desiredAngle = 90;
 
 // Short range IR
   // Front
@@ -78,7 +79,11 @@ int L1 = 1;
 int L2 = 0;
 int Rw = 1;
 int maxSpeedValue = 200;
-int minSpeedValue = 5; 
+int minSpeedValue = 30; 
+
+// Gains
+float rotationGain = 30.0f;
+float sidewaysGain = 40.0f;
 
 // Other
 HardwareSerial *SerialCom;
@@ -138,7 +143,7 @@ RUNNING_STATE initialising() {
 
 RUNNING_STATE running() {
   static unsigned long running_previous_millis;
-  static ACTION_STATE action_state = STILL;
+  static ACTION_STATE action_state = MOVING_TURNING;
   unsigned int deltaTime = millis() - running_previous_millis;
   
   if (deltaTime >= loopTime) {
@@ -151,10 +156,10 @@ RUNNING_STATE running() {
 
   switch (action_state) {
     case MOVING_FORWARD:
-      move_forward();
+      action_state = move_forward();
       break;
     case MOVING_TURNING:
-      //move_turning(); - TODO
+      action_state = move_turning();
       break;
     case STILL:
       still();
@@ -192,27 +197,59 @@ RUNNING_STATE stopped() {
 }
 
 ACTION_STATE still() {
-  left_front_motor.writeMicroseconds(1500);
-  left_rear_motor.writeMicroseconds(1500);
-  right_rear_motor.writeMicroseconds(1500);
-  right_front_motor.writeMicroseconds(1500);
+  stop();
+}
+
+ACTION_STATE move_turning() {
+
+  //error
+  float angleError = desiredAngle - currentAngle;
+
+  if(angleError > 180){
+    angleError = angleError - 360;
+  } else if (angleError < -180){
+    angleError = angleError + 360;
+  }
+  
+  #ifdef ROTATION_CONTROL_DEBUG
+    Serial.print("Desired: ");
+    Serial.print(desiredAngle);
+    Serial.print(" Current: ");
+    Serial.print(currentAngle);
+    Serial.print(" Error: ");
+    Serial.println(angleError);
+  #endif
+
+  float Wz;
+  float Vy = 0;
+  float Vx = 0;
+
+  //P controller that is usually saturated (maybe PD?)
+  Wz = -1 * clamp( angleError * rotationGain, 100, 0);
+
+  int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
+  int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
+  int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
+  int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
+
+  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
+
+  
+  //error and angular velocity transition condition
+
+  return MOVING_TURNING;
+    
 }
 
 ACTION_STATE move_forward() {
   float Wz = get_Wz();
-  float Vy = 0; // get_Vy();
-  // Wz = get_Wz(); - This is the Wz from the controller
+  float Vy = get_Vy();
   float Vx = 0; 
 
-  int motor_speed_1 = (int)((Vx + Vy - Wz*(L1 + L2)) / Rw);
-  int motor_speed_2 = (int)((Vx - Vy + Wz*(L1 + L2)) / Rw);
-  int motor_speed_3 = (int)((Vx - Vy - Wz*(L1 + L2)) / Rw);
-  int motor_speed_4 = (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
-
-  motor_speed_1 = clamp(motor_speed_1, maxSpeedValue, minSpeedValue);
-  motor_speed_2 = clamp(motor_speed_2, maxSpeedValue, minSpeedValue);
-  motor_speed_3 = clamp(motor_speed_3, maxSpeedValue, minSpeedValue);
-  motor_speed_4 = clamp(motor_speed_4, maxSpeedValue, minSpeedValue);
+  int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
+  int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
+  int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
+  int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
 
   #ifdef ROTATION_CONTROL_DEBUG
     Serial.print(Vy);
@@ -226,30 +263,30 @@ ACTION_STATE move_forward() {
     Serial.println(motor_speed_4);
   #endif
 
-  left_front_motor.writeMicroseconds(1500 + motor_speed_1);
-  right_front_motor.writeMicroseconds(1500 - motor_speed_2);
-  left_rear_motor.writeMicroseconds(1500 + motor_speed_3);
-  right_rear_motor.writeMicroseconds(1500 - motor_speed_4);
+  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
   
   return MOVING_FORWARD;
+
+  // if transition condition met
+  float desiredAngle = currentAngle + 90;
 }
 
 float get_Wz() {
    float r = 0;
    float IRdifference = srIRBackFiltered - srIRFrontFiltered;
    float controlDifference = r - IRdifference;
-   return controlDifference * 25;
+   return controlDifference * rotationGain;
 }
 
 float get_Vy() {
    float r = 15;
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
    float controlDifference = r - IRSetDistanceDifference;
-   // Estimate K
-   return controlDifference * 15; 
+   return controlDifference * sidewaysGain;
 }
 
 int clamp(int value, int maxValue, int minValue) {
+  // Will clamp the value if the value is outside the maximum ranges
   if (value < -maxValue)
     return -maxValue;
   else if (value > maxValue)
@@ -257,6 +294,7 @@ int clamp(int value, int maxValue, int minValue) {
   else
     return value;
 
+  // Will clamp if the value is too close to zero
   if (value < minValue)
     return 0;
   else if (value > -minValue) 
@@ -370,64 +408,21 @@ void enable_motors()
   right_front_motor.attach(right_front);
 }
 
+int kinematic_calc(int Vx, int Vy, int Wz) {
+    return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
+}
+
+void write_to_motors(int motor1, int motor2, int motor3, int motor4) {
+  left_front_motor.writeMicroseconds(1500 + clamp(motor1, maxSpeedValue, minSpeedValue));
+  right_front_motor.writeMicroseconds(1500 - clamp(motor2, maxSpeedValue, minSpeedValue));
+  left_rear_motor.writeMicroseconds(1500 + clamp(motor3, maxSpeedValue, minSpeedValue));
+  right_rear_motor.writeMicroseconds(1500 - clamp(motor4, maxSpeedValue, minSpeedValue));
+}
+
 void stop()
 {
-  left_front_motor.writeMicroseconds(1500);
-  left_rear_motor.writeMicroseconds(1500);
-  right_rear_motor.writeMicroseconds(1500);
-  right_front_motor.writeMicroseconds(1500);
+  write_to_motors(0, 0, 0, 0);
 }
-
-/*
-void move_forward()
-{
-  left_front_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_front_motor.writeMicroseconds(1500 - speed_val);
-}
-*/
-
-void move_backward()
-{
-  left_front_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_front_motor.writeMicroseconds(1500 + speed_val);
-}
-
-void move_counter_clockwise()
-{
-  left_front_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_front_motor.writeMicroseconds(1500 - speed_val);
-}
-
-void move_clockwise()
-{
-  left_front_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_front_motor.writeMicroseconds(1500 + speed_val);
-}
-
-void move_sideways_left()
-{
-  left_front_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_front_motor.writeMicroseconds(1500 - speed_val);
-}
-
-void move_sideways_right()
-{
-  left_front_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_front_motor.writeMicroseconds(1500 + speed_val);
-}
-
 
 // =========================================================================
 //Gyro Functions
