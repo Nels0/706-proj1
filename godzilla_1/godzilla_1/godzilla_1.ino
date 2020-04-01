@@ -92,12 +92,16 @@ float sidewaysGain = 40.0f;
 
 // Other
 HardwareSerial *SerialCom;
+static RUNNING_STATE machine_state;
 int loopTime = 10; // Time for each loop in ms
 Servo left_front_motor;
 Servo left_rear_motor;
 Servo right_rear_motor;
 Servo right_front_motor;
+int turn_count = 0; 
 int speed_val = 100;
+float angleError; 
+float Wz; 
 
 // =========================================================================
 // Setup function
@@ -120,7 +124,7 @@ void setup() {
 // =========================================================================
 // Main loop function
 void loop() {
-  static RUNNING_STATE machine_state = INITIALISING;
+  machine_state = INITIALISING;
   switch (machine_state) {
     case INITIALISING:
       machine_state = initialising();
@@ -155,19 +159,44 @@ RUNNING_STATE running() {
     GYRO_reading(deltaTime);
     SR_IR_front_reading();
     SR_IR_back_reading();
+    sonar_reading(); 
     //LR_IR_reading(); 
     running_previous_millis = millis();
   }
 
   switch (action_state) {
     case MOVING_FORWARD:
-      action_state = move_forward();
+      move_forward();
+
+      //if the distance from the sonar to wall is less than 15 cm, robot will stop
+      if (distance < 15) {
+        action_state = STILL; 
+      }
+
       break;
     case MOVING_TURNING:
-      action_state = move_turning();
+      move_turning();
+
+      //error and angular velocity transition condition
+      //These margins are estimates...
+      if (angleError < 0.5 && Wz < 5) {
+        turn_count++; 
+        action_state = MOVING_FORWARD; 
+      }
+
       break;
     case STILL:
       still();
+
+      //When the robot reaches the finish, it will have turned three times
+      //the program completes at this point
+      //otherwise it will continue to rotate
+      if (turn_count == 3) {
+        machine_state = STOPPED; 
+      } else {
+        action_state = MOVING_TURNING;
+      }
+
       break;
   }
   
@@ -201,15 +230,16 @@ RUNNING_STATE stopped() {
   return STOPPED;
 }
 
-ACTION_STATE still() {
+void still() {
   stop();
 }
 
-ACTION_STATE move_turning() {
+void move_turning() {
 
   //error
-  float angleError = desiredAngle - currentAngle;
+  angleError = desiredAngle - currentAngle;
 
+  // Please describe this in detail
   if(angleError > 180){
     angleError = angleError - 360;
   } else if (angleError < -180){
@@ -225,7 +255,6 @@ ACTION_STATE move_turning() {
     Serial.println(angleError);
   #endif
 
-  float Wz;
   float Vy = 0;
   float Vx = 0;
 
@@ -237,16 +266,10 @@ ACTION_STATE move_turning() {
   int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
   int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
 
-  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
-
-  
-  //error and angular velocity transition condition
-
-  return MOVING_TURNING;
-    
+  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);  
 }
 
-ACTION_STATE move_forward() {
+void move_forward() {
   float Wz = get_Wz();
   float Vy = -get_Vy(); // Negative to align itself with the LEFT wall
   float Vx = 0; 
@@ -269,8 +292,6 @@ ACTION_STATE move_forward() {
   #endif
 
   write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
-  
-  return MOVING_FORWARD;
 
   // if transition condition met
   float desiredAngle = currentAngle + 90;
@@ -445,6 +466,8 @@ void write_to_motors(int motor1, int motor2, int motor3, int motor4) {
 void stop()
 {
   write_to_motors(0, 0, 0, 0);
+  //insure device has stopped with consideration to inertial effects 
+  delay(500); 
 }
 
 // =========================================================================
