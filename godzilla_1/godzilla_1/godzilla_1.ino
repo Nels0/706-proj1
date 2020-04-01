@@ -4,6 +4,7 @@
 #define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
+//#define SONAR_DEBUG
 #define ROTATION_CONTROL_DEBUG
 #include <Servo.h>
 
@@ -40,6 +41,9 @@ const byte left_front = 46;
 const byte left_rear = 47;
 const byte right_rear = 50;
 const byte right_front = 51;
+// TO DO: Sonar pin allocation
+int sonarTrigPin;
+int sonarEchoPin;
 
 // =========================================================================
 // Variables
@@ -72,7 +76,8 @@ float sumBack = 0;
 float srIRBackFiltered = 0; 
 
 //Sonar
-int sonarTimeUS;
+float distance = 0;
+float signal_duration = 0;
 
 // Speed
 int L1 = 1;
@@ -376,12 +381,30 @@ void SR_IR_back_reading() {
 
 
 void sonar_setup(){
-  
+  Serial.begin(9600);
+  pinMode(sonarTrigPin, OUTPUT);
+  pinMode(sonarEchoPin, INPUT);
 }
 
 void sonar_reading(){
+  // Trigger HIGH pulse of 10
+  digitalWrite(sonarTrigPin, LOW);
+  delayMicroseconds(5);
+  digitalWrite(sonarTrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(sonarTrigPin, LOW);
 
-  
+  // Read duration signal
+  pinMode(sonarEchoPin, INPUT);
+  signal_duration = pulseIn(sonarEchoPin, HIGH);
+  // Convert to distance by multiplying by speed of sound, 
+  // accounting for returned wave by division of 2
+  distance = (signal_duration/2.0)*0.0343;
+
+  #ifdef SONAR_DEBUG
+    Serial.print(" Sonar Distance: ");
+    Serial.print(distance);
+  #endif
 }
 
 // =========================================================================
