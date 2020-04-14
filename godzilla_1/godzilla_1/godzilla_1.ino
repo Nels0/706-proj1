@@ -89,6 +89,8 @@ int minSpeedValue = 30;
 // Gains
 float rotationGain_P = 30.0f;
 float rotationGain_I = 1.0f;
+float sidewaysGain_P = 40.0f;
+float sidewaysGain_I = 1.0f;
 
 // Other
 HardwareSerial *SerialCom;
@@ -271,7 +273,7 @@ void move_turning() {
 
 void move_forward(int deltaTime) {
   float Wz = get_Wz(deltaTime);
-  float Vy = -get_Vy(); // Negative to align itself with the LEFT wall
+  float Vy = -get_Vy(deltaTime); // Negative to align itself with the LEFT wall
   float Vx = 0; 
 
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
@@ -305,11 +307,12 @@ float get_Wz(int deltaTime) {
    return controlDifference;
 }
 
-float get_Vy() {
+float get_Vy(int deltaTime) {
    float r = 15;
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
-   float controlDifference = r - IRSetDistanceDifference;
-   return controlDifference * sidewaysGain;
+   float error = r - IRSetDistanceDifference;
+   float controlDifference = (error * sidewaysGain_P) + (error * sidewaysGain_I * deltaTime);
+   return controlDifference;
 }
 
 int clamp(int value, int maxValue, int minValue) {
