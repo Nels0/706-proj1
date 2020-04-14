@@ -76,7 +76,7 @@ float sumBack = 0;
 float srIRBackFiltered = 0; 
 
 //Sonar
-float distance = 0;
+float sonar_distance = 0;
 float signal_duration = 0;
 
 // Speed
@@ -91,6 +91,8 @@ float rotationGain_P = 30.0f;
 float rotationGain_I = 1.0f;
 float sidewaysGain_P = 40.0f;
 float sidewaysGain_I = 1.0f;
+float forwardGain_P = 40.0f;
+float forwardGain_I = 1.0f;
 
 // Other
 HardwareSerial *SerialCom;
@@ -171,7 +173,7 @@ RUNNING_STATE running() {
       move_forward(deltaTime);
 
       //if the distance from the sonar to wall is less than 15 cm, robot will stop
-      if (distance < 15) {
+      if (sonar_distance < 14.5) {
         action_state = STILL; 
       }
 
@@ -274,7 +276,7 @@ void move_turning() {
 void move_forward(int deltaTime) {
   float Wz = get_Wz(deltaTime);
   float Vy = -get_Vy(deltaTime); // Negative to align itself with the LEFT wall
-  float Vx = 0; 
+  float Vx = get_Vx(deltaTime); 
 
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
   int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
@@ -312,6 +314,13 @@ float get_Vy(int deltaTime) {
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
    float error = r - IRSetDistanceDifference;
    float controlDifference = (error * sidewaysGain_P) + (error * sidewaysGain_I * deltaTime);
+   return controlDifference;
+}
+
+float get_Vx(int deltaTime) {
+   float r = 15;
+   float error = r - sonar_distance;
+   float controlDifference = (error * forwardGain_P) + (error * forwardGain_I * deltaTime);
    return controlDifference;
 }
 
@@ -424,11 +433,11 @@ void sonar_reading(){
   signal_duration = pulseIn(sonarEchoPin, HIGH);
   // Convert to distance by multiplying by speed of sound, 
   // accounting for returned wave by division of 2
-  distance = (signal_duration/2.0)*0.0343;
+  sonar_distance = (signal_duration/2.0)*0.0343;
 
   #ifdef SONAR_DEBUG
     Serial.print(" Sonar Distance: ");
-    Serial.print(distance);
+    Serial.print(sonar_distance);
   #endif
 }
 
