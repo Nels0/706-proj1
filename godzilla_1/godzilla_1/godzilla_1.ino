@@ -87,8 +87,8 @@ int maxSpeedValue = 200;
 int minSpeedValue = 30; 
 
 // Gains
-float rotationGain = 30.0f;
-float sidewaysGain = 40.0f;
+float rotationGain_P = 30.0f;
+float rotationGain_I = 1.0f;
 
 // Other
 HardwareSerial *SerialCom;
@@ -166,7 +166,7 @@ RUNNING_STATE running() {
 
   switch (action_state) {
     case MOVING_FORWARD:
-      move_forward();
+      move_forward(deltaTime);
 
       //if the distance from the sonar to wall is less than 15 cm, robot will stop
       if (distance < 15) {
@@ -259,7 +259,7 @@ void move_turning() {
   float Vx = 0;
 
   //P controller that is usually saturated (maybe PD?)
-  Wz = -clamp(angleError * rotationGain, 100, 0);
+  Wz = -clamp(angleError * rotationGain_P, 100, 0);
 
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
   int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
@@ -269,8 +269,8 @@ void move_turning() {
   write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);  
 }
 
-void move_forward() {
-  float Wz = get_Wz();
+void move_forward(int deltaTime) {
+  float Wz = get_Wz(deltaTime);
   float Vy = -get_Vy(); // Negative to align itself with the LEFT wall
   float Vx = 0; 
 
@@ -297,11 +297,12 @@ void move_forward() {
   float desiredAngle = currentAngle + 90;
 }
 
-float get_Wz() {
+float get_Wz(int deltaTime) {
    float r = 0;
    float IRdifference = srIRFrontFiltered - srIRBackFiltered;
-   float controlDifference = r - IRdifference;
-   return controlDifference * rotationGain;
+   float error = r - IRdifference;
+   float controlDifference = (error * rotationGain_P) + (error * rotationGain_I * deltaTime);
+   return controlDifference;
 }
 
 float get_Vy() {
