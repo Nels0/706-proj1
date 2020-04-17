@@ -4,8 +4,8 @@
 #define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
-//#define SONAR_DEBUG
-#define ROTATION_CONTROL_DEBUG
+#define SONAR_DEBUG
+//#define ROTATION_CONTROL_DEBUG
 #include <Servo.h>
 
 // =========================================================================
@@ -42,8 +42,8 @@ const byte left_rear = 47;
 const byte right_rear = 50;
 const byte right_front = 51;
 // TO DO: Sonar pin allocation
-int sonarTrigPin;
-int sonarEchoPin;
+int sonarTrigPin = 17;
+int sonarEchoPin = 16;
 
 // =========================================================================
 // Variables
@@ -55,7 +55,7 @@ int gyroValue = 0;
 float gyroSupplyVoltage = 5;
 float gyroZeroVoltage = 0;
 float gyroSensitivity = 0.007;
-float rotationThreshold = 1.5;
+float rotationThreshold = 0.5;
 float gyroRate = 0;
 float currentAngle = 0;
 float desiredAngle = 90;
@@ -76,8 +76,8 @@ float sumBack = 0;
 float srIRBackFiltered = 0; 
 
 //Sonar
-float sonar_distance = 0;
-float signal_duration = 0;
+float sonar_distance = 0.0f;
+float signal_duration = 0.0f;
 
 // Speed
 int L1 = 1;
@@ -88,11 +88,12 @@ int minSpeedValue = 30;
 
 // Gains
 float rotationGain_P = 30.0f;
-float rotationGain_I = 1.0f;
+float rotationGain_I = 0.0f;
 float sidewaysGain_P = 40.0f;
-float sidewaysGain_I = 1.0f;
+
+float sidewaysGain_I = 0.0f;
 float forwardGain_P = 40.0f;
-float forwardGain_I = 1.0f;
+float forwardGain_I = 0.0f;
 
 // Other
 HardwareSerial *SerialCom;
@@ -123,12 +124,14 @@ void setup() {
 
   GYRO_setup();
   IR_setup();
+  
 }
 
 // =========================================================================
 // Main loop function
 void loop() {
-  machine_state = INITIALISING;
+  static RUNNING_STATE machine_state = INITIALISING;
+  
   switch (machine_state) {
     case INITIALISING:
       machine_state = initialising();
@@ -156,7 +159,7 @@ RUNNING_STATE initialising() {
 
 RUNNING_STATE running() {
   static unsigned long running_previous_millis;
-  static ACTION_STATE action_state = MOVING_TURNING;
+  static ACTION_STATE action_state = MOVING_FORWARD;
   unsigned int deltaTime = millis() - running_previous_millis;
   
   if (deltaTime >= loopTime) {
@@ -212,6 +215,9 @@ RUNNING_STATE stopped() {
   static byte counter_lipo_voltage_ok;
   static unsigned long previous_millis;
   int Lipo_level_cal;
+
+  stop();
+  
   if (millis() - previous_millis > 500) { //print massage every 500ms
     previous_millis = millis();
     SerialCom->println("STOPPED---------");
@@ -224,7 +230,7 @@ RUNNING_STATE stopped() {
         counter_lipo_voltage_ok = 0;
         enable_motors();
         SerialCom->println("Lipo OK returning to RUN STATE");
-        return RUNNING;
+        return INITIALISING;
       }
     } else
     {
@@ -265,40 +271,19 @@ void move_turning() {
   //P controller that is usually saturated (maybe PD?)
   Wz = -clamp(angleError * rotationGain_P, 100, 0);
 
-  int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
-  int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
-  int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
-  int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
 
-  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);  
+  setSpeeds(Vx, Vy, Wz);
 }
 
 void move_forward(int deltaTime) {
   float Wz = get_Wz(deltaTime);
   float Vy = -get_Vy(deltaTime); // Negative to align itself with the LEFT wall
-  float Vx = get_Vx(deltaTime); 
+  float Vx = 0.0f;//get_Vx(deltaTime); 
 
-  int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
-  int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
-  int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
-  int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
-
-  #ifdef ROTATION_CONTROL_DEBUG
-    Serial.print(Vy);
-    Serial.print(" 1: ");
-    Serial.print(motor_speed_1);
-    Serial.print(" 2: ");
-    Serial.print(motor_speed_2);
-    Serial.print(" 3: ");
-    Serial.print(motor_speed_3);
-    Serial.print(" 4: ");
-    Serial.println(motor_speed_4);
-  #endif
-
-  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
+  setSpeeds(Vx, Vy, Wz);
 
   // if transition condition met
-  float desiredAngle = currentAngle + 90;
+  float desiredAngle = currentAngle - 90;
 }
 
 float get_Wz(int deltaTime) {
@@ -433,11 +418,12 @@ void sonar_reading(){
   signal_duration = pulseIn(sonarEchoPin, HIGH);
   // Convert to distance by multiplying by speed of sound, 
   // accounting for returned wave by division of 2
-  sonar_distance = (signal_duration/2.0)*0.0343;
+  // offset by 7cm to account for sensor positioning on robot
+  sonar_distance = (signal_duration/2.0)*0.0343 - 7.0;
 
   #ifdef SONAR_DEBUG
     Serial.print(" Sonar Distance: ");
-    Serial.print(sonar_distance);
+    Serial.println(sonar_distance);
   #endif
 }
 
@@ -474,6 +460,16 @@ void write_to_motors(int motor1, int motor2, int motor3, int motor4) {
   right_front_motor.writeMicroseconds(1500 + clamp(motor2, maxSpeedValue, minSpeedValue));
   left_rear_motor.writeMicroseconds(1500 - clamp(motor3, maxSpeedValue, minSpeedValue));
   right_rear_motor.writeMicroseconds(1500 + clamp(motor4, maxSpeedValue, minSpeedValue));
+}
+
+void setSpeeds(int Vx, int Vy, int Wz){
+
+  int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
+  int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
+  int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
+  int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
+
+  write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
 }
 
 void stop()
