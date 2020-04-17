@@ -249,7 +249,17 @@ void move_turning() {
   //error
   angleError = desiredAngle - currentAngle;
 
-  // Please describe this in detail
+  /* I think this is wrong
+   * because our positive angular velocity is counter-clockwise
+   * will that make a difference?
+   * 
+   * e.g. facing 0 degrees
+   * want to go 90 degrees to the right (clockwise), so -90 (because positive is counter-clockwise)
+   * angleError = -90 - 0 = -90
+   * Wz = -(-90 * gain_P) = 90P
+   * This would turn counter-clockwise, which is not what we want
+   */
+   
   if(angleError > 180){
     angleError = angleError - 360;
   } else if (angleError < -180){
