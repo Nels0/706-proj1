@@ -265,35 +265,43 @@ void move_turning() {
     Serial.println(angleError);
   #endif
 
-  float Vy = 0;
-  float Vx = 0;
-
   //P controller that is usually saturated (maybe PD?)
   Wz = -clamp(angleError * rotationGain_P, 100, 0);
 
-
-  setSpeeds(Vx, Vy, Wz);
+  // linear velocities are zero, angular velocity is determined by controller
+  setSpeeds(0, 0, Wz);
 }
 
 void move_forward(int deltaTime) {
+  
+  /* |     ____=____
+   * |  []-|       |-[]    ^ Y
+   * |     o   ^   |       |
+   * |     |   |   |       +---> X
+   * |     o   |   |       
+   * |  []-|_______|-[]    Positive angular velocity counter-clockwise
+   */   
+  
   float Wz = get_Wz(deltaTime);
   float Vy = -get_Vy(deltaTime); // Negative to align itself with the LEFT wall
   float Vx = 0.0f;//get_Vx(deltaTime); 
-
   setSpeeds(Vx, Vy, Wz);
-
   // if transition condition met
   float desiredAngle = currentAngle - 90;
 }
 
+// Rotational velocity controller
 float get_Wz(int deltaTime) {
    float r = 0;
+   // If the front sensor is greater than the back sensor, POSITIVE response (counter-clockwise) is required
    float IRdifference = srIRFrontFiltered - srIRBackFiltered;
+   // There is an issue here: error is NEGATIVE if the front sensor is greater than the back sensor
    float error = r - IRdifference;
    float controlDifference = (error * rotationGain_P) + (error * rotationGain_I * deltaTime);
    return controlDifference;
 }
 
+// Lateral velocity controller
 float get_Vy(int deltaTime) {
    float r = 15;
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
@@ -302,6 +310,7 @@ float get_Vy(int deltaTime) {
    return controlDifference;
 }
 
+// Linear velocity controller
 float get_Vx(int deltaTime) {
    float r = 15;
    float error = r - sonar_distance;
