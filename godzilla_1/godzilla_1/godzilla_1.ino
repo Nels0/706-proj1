@@ -474,12 +474,25 @@ void write_to_motors(int motor1, int motor2, int motor3, int motor4) {
 }
 
 void setSpeeds(int Vx, int Vy, int Wz){
-
+  /* |      ____=____
+   * |  [1]-|       |-[2]   ^ Y
+   * |      o   ^   |       |
+   * |      |   |   |       +---> X
+   * |      o   |   |        Each motor has matching coordinate system
+   * |  [3]-|_______|-[4]    Positive angular velocity counter-clockwise
+   * 
+   * From slides:
+   * S1 = (Vx + Vy - (L1 + L2)*Wz)/Rw
+   * S2 = (Vx - Vy + (L1 + L2)*Wz)/Rw
+   * S3 = (Vx - Vy - (L1 + L2)*Wz)/Rw
+   * S4 = (Vx + Vy + (L1 + L2)*Wz)/Rw
+   */   
+   
   int motor_speed_1 = kinematic_calc(Vx, Vy, -Wz);
   int motor_speed_2 = kinematic_calc(Vx, -Vy, Wz);
   int motor_speed_3 = kinematic_calc(Vx, -Vy, -Wz);
   int motor_speed_4 = kinematic_calc(Vx, Vy, Wz);
-
+  
   write_to_motors(motor_speed_1, motor_speed_2, motor_speed_3, motor_speed_4);
 }
 
