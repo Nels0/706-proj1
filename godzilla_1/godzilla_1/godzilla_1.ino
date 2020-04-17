@@ -166,44 +166,33 @@ RUNNING_STATE running() {
     GYRO_reading(deltaTime);
     SR_IR_front_reading();
     SR_IR_back_reading();
-    sonar_reading(); 
-    //LR_IR_reading(); 
+    sonar_reading();
     running_previous_millis = millis();
   }
 
   switch (action_state) {
     case MOVING_FORWARD:
       move_forward(deltaTime);
-
-      //if the distance from the sonar to wall is less than 15 cm, robot will stop
-      if (sonar_distance < 14.5) {
-        action_state = STILL; 
-      }
-
+      // If the distance from the sonar to wall is less than ~15 cm, robot will stop.
+      if (sonar_distance < 14.5) action_state = STILL;
       break;
+      
     case MOVING_TURNING:
       move_turning();
-
-      //error and angular velocity transition condition
-      //These margins are estimates...
+      // Error and angular velocity transition condition
+      // These margins are estimates...
       if (angleError < 0.5 && Wz < 5) {
-        turn_count++; 
-        action_state = MOVING_FORWARD; 
+        turn_count++;
+        action_state = MOVING_FORWARD;
       }
-
       break;
+      
     case STILL:
       still();
-
-      //When the robot reaches the finish, it will have turned three times
-      //the program completes at this point
-      //otherwise it will continue to rotate
-      if (turn_count == 3) {
-        machine_state = STOPPED; 
-      } else {
-        action_state = MOVING_TURNING;
-      }
-
+      // When the robot reaches the finish, it will have turned three times.
+      // The program completes at this point. Otherwise, it will continue to rotate.
+      if (turn_count == 3) machine_state = STOPPED; 
+      else action_state = MOVING_TURNING;
       break;
   }
   
@@ -218,7 +207,7 @@ RUNNING_STATE stopped() {
 
   stop();
   
-  if (millis() - previous_millis > 500) { //print massage every 500ms
+  if (millis() - previous_millis > 500) { // Print message every 500ms
     previous_millis = millis();
     SerialCom->println("STOPPED---------");
     //500ms timed if statement to check lipo and output speed settings
