@@ -1,10 +1,10 @@
 // ========================================================================
 // Defines and includes
 //#define NO_BATTERY_V_OK
-#define GYRO_DEBUG
+//#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
-#define SONAR_DEBUG
+//#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
 #include <Servo.h>
 
@@ -41,7 +41,6 @@ const byte left_front = 46;
 const byte left_rear = 47;
 const byte right_rear = 50;
 const byte right_front = 51;
-// TO DO: Sonar pin allocation
 int sonarTrigPin = 17;
 int sonarEchoPin = 16;
 
@@ -263,15 +262,15 @@ void move_turning() {
 void move_forward(int deltaTime) {
   
   /* |     ____=____
-   * |  []-|       |-[]    ^ Y
+   * |  []-|       |-[]    ^ X
    * |     o   ^   |       |
-   * |     |   |   |       +---> X
+   * |     |   |   |       +---> Y
    * |     o   |   |       
-   * |  []-|_______|-[]    Positive angular velocity counter-clockwise
+   * |  []-|_______|-[]    Positive angular velocity clockwise
    */   
   
   float Wz = get_Wz(deltaTime);
-  float Vy = get_Vy(deltaTime); // Negative to align itself with the LEFT wall
+  float Vy = 0.0f;//get_Vy(deltaTime); // Negative to align itself with the LEFT wall
   float Vx = 0.0f;//get_Vx(deltaTime); 
   setSpeeds(Vx, Vy, Wz);
   // if transition condition met
@@ -281,7 +280,7 @@ void move_forward(int deltaTime) {
 // Rotational velocity controller
 float get_Wz(int deltaTime) {
    float r = 0;
-   float IRdifference = srIRBackFiltered - srIRFrontFiltered;
+   float IRdifference = srIRFrontFiltered - srIRBackFiltered;
    float error = r - IRdifference;
    float controlDifference = (error * rotationGain_P) + (error * rotationGain_I * deltaTime);
    return controlDifference;
@@ -290,8 +289,8 @@ float get_Wz(int deltaTime) {
 // Lateral velocity controller
 float get_Vy(int deltaTime) {
    float r = 15;
-   float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
-   float error = r - IRSetDistanceDifference;
+   float meanDistance = ((srIRFrontFiltered + srIRBackFiltered) / 2);
+   float error = r - meanDistance;
    float controlDifference = (error * sidewaysGain_P) + (error * sidewaysGain_I * deltaTime);
    return controlDifference;
 }
@@ -414,7 +413,8 @@ void sonar_reading(){
   // Convert to distance by multiplying by speed of sound, 
   // accounting for returned wave by division of 2
   // offset by 7cm to account for sensor positioning on robot
-  sonar_distance = (signal_duration/2.0)*0.0343 - 7.0;
+  //sonar_distance = (signal_duration/2.0)*0.0343 - 7.0;
+  sonar_distance = 200;
 
   #ifdef SONAR_DEBUG
     Serial.print(" Sonar Distance: ");
