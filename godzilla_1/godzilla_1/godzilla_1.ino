@@ -305,6 +305,8 @@ float get_Wz(int deltaTime) {
 float get_Vy(int deltaTime) {
    float r = 15;
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
+   // Error is POSITIVE if robot is too close, NEGATIVE if too far away
+   // If too far away, error is NEGATIVE, so response would be in the negative Y direction (closer to the wall), which we want. So why do we multiply by - when we call the get_Wy function?
    float error = r - IRSetDistanceDifference;
    float controlDifference = (error * sidewaysGain_P) + (error * sidewaysGain_I * deltaTime);
    return controlDifference;
