@@ -237,17 +237,6 @@ void move_turning() {
 
   //error
   angleError = desiredAngle - currentAngle;
-
-  /* I think this is wrong
-   * because our positive angular velocity is counter-clockwise
-   * will that make a difference?
-   * 
-   * e.g. facing 0 degrees
-   * want to go 90 degrees to the right (clockwise), so -90 (because positive is counter-clockwise)
-   * angleError = -90 - 0 = -90
-   * Wz = -(-90 * gain_P) = 90P
-   * This would turn counter-clockwise, which is not what we want
-   */
    
   if(angleError > 180){
     angleError = angleError - 360;
@@ -265,7 +254,7 @@ void move_turning() {
   #endif
 
   //P controller that is usually saturated (maybe PD?)
-  Wz = -clamp(angleError * rotationGain_P, 100, 0);
+  Wz = clamp(angleError * rotationGain_P, 100, 0);
 
   // linear velocities are zero, angular velocity is determined by controller
   setSpeeds(0, 0, Wz);
@@ -282,7 +271,7 @@ void move_forward(int deltaTime) {
    */   
   
   float Wz = get_Wz(deltaTime);
-  float Vy = -get_Vy(deltaTime); // Negative to align itself with the LEFT wall
+  float Vy = get_Vy(deltaTime); // Negative to align itself with the LEFT wall
   float Vx = 0.0f;//get_Vx(deltaTime); 
   setSpeeds(Vx, Vy, Wz);
   // if transition condition met
@@ -292,9 +281,7 @@ void move_forward(int deltaTime) {
 // Rotational velocity controller
 float get_Wz(int deltaTime) {
    float r = 0;
-   // If the front sensor is greater than the back sensor, POSITIVE response (counter-clockwise) is required
-   float IRdifference = srIRFrontFiltered - srIRBackFiltered;
-   // There is an issue here: error is NEGATIVE if the front sensor is greater than the back sensor
+   float IRdifference = srIRBackFiltered - srIRFrontFiltered;
    float error = r - IRdifference;
    float controlDifference = (error * rotationGain_P) + (error * rotationGain_I * deltaTime);
    return controlDifference;
@@ -304,8 +291,6 @@ float get_Wz(int deltaTime) {
 float get_Vy(int deltaTime) {
    float r = 15;
    float IRSetDistanceDifference = ((srIRFrontFiltered + srIRBackFiltered) / 2);
-   // Error is POSITIVE if robot is too close, NEGATIVE if too far away
-   // If too far away, error is NEGATIVE, so response would be in the negative Y direction (closer to the wall), which we want. So why do we multiply by - when we call the get_Wy function?
    float error = r - IRSetDistanceDifference;
    float controlDifference = (error * sidewaysGain_P) + (error * sidewaysGain_I * deltaTime);
    return controlDifference;
