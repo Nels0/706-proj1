@@ -17,6 +17,18 @@
  * 
  */
 
+// ========= TODO =========
+/* better debugging?
+ * drive forward
+ * determine conversion factor between pulse and rotational vel of wheels
+ * gyro reading/calibrations
+ * sonar reading
+ * turning state
+ * integral windup
+ * still state
+ * 
+ */
+
 // ======================Enums===================================================
  
 
@@ -81,7 +93,7 @@ float irBackBuffer[5];
 // GAINS
 float kP_Wz = 3.0f;
 float kI_Wz = 0.0f;
-float kP_Vy = 80.0f;
+float kP_Vy = 100.0f;
 float kI_Vy = 0.0f;
 
 // Motors
@@ -89,7 +101,7 @@ float L1 = 6;
 float L2 = 6.5;
 float Rw = 2;
 int maxSpeedValue = 200;
-int minSpeedValue = 30; 
+int minSpeedValue = 100; 
 
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
@@ -207,7 +219,7 @@ ACTION_STATE MoveForward(int deltaTime){
 
   float Wz = GetWz(deltaTime);
   float Vy = GetVy(deltaTime);
-  float Vx = 0.0f;//get_Vx(deltaTime); 
+  float Vx = 1000.0f;//get_Vx(deltaTime); 
   
   MotorWrite(Vx, Vy, Wz);
 
@@ -249,10 +261,15 @@ void EnableMotors(){
 }
 
 void MotorWrite(float Vx, float Vy, float Wz){
-  int motor1Speed = KinematicCalc(Vx, Vy, -Wz);
-  int motor2Speed = KinematicCalc(Vx, -Vy, Wz);
-  int motor3Speed = KinematicCalc(Vx, -Vy, -Wz);
-  int motor4Speed = KinematicCalc(Vx, Vy, Wz);
+  float _Vx = Sat2(Vx, 60, 0);
+  float _Vy = Sat2(Vy, 60, 0);
+  float _Wz = Sat2(Wz, 100, 0);
+
+  //TODO: Conversion factor for cm/s to pulse width!!
+  int motor1Speed = KinematicCalc(_Vx,  _Vy, -_Wz);
+  int motor2Speed = KinematicCalc(_Vx, -_Vy,  _Wz);
+  int motor3Speed = KinematicCalc(_Vx, -_Vy, -_Wz);
+  int motor4Speed = KinematicCalc(_Vx,  _Vy,  _Wz);
 
   motor1.writeMicroseconds(1500 + Sat2(motor1Speed, maxSpeedValue, minSpeedValue));
   motor2.writeMicroseconds(1500 - Sat2(motor2Speed, maxSpeedValue, minSpeedValue));
@@ -318,7 +335,8 @@ boolean is_battery_voltage_OK()
 
   int Lipo_level_cal;
   int raw_lipo;
-  //the voltage of a LiPo cell depends on its chemistry and varies from about 3.5V (discharged) = 717(3.5V Min) https://oscarliang.com/lipo-battery-guide/
+  //the voltage of a LiPo cell depends on its chemistry and varies from about 
+  //3.5V (discharged) = 717(3.5V Min) https://oscarliang.com/lipo-battery-guide/
   //to about 4.20-4.25V (fully charged) = 860(4.2V Max)
   //Lipo Cell voltage should never go below 3V, So 3.5V is a safety factor.
   raw_lipo = analogRead(A0);
