@@ -1,7 +1,7 @@
 // ========================================================================
 // Defines and includes
 //#define NO_BATTERY_V_OK
-#define GYRO_DEBUG
+//#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
 //#define SONAR_DEBUG
@@ -341,6 +341,11 @@ void IrSetup(){
   //Filter part
 }
 
+void SonarSetup(){
+  pinMode(sonarTrigPin, OUTPUT);
+  pinMode(sonarEchoPin, INPUT);
+}
+
 void GyroSetup() {
   int i;
   int gyroValue;
@@ -365,7 +370,7 @@ void ReadSensors(int deltaTime){
   ReadGyro(deltaTime);
   ReadIR(irFrontPin, irFront, irFrontBuffer);
   ReadIR(irBackPin, irBack, irBackBuffer);
-  //sonar_reading();
+  ReadSonar();
 }
 
 void ReadIR(int irPin, float &value, float irBuffer[]){
@@ -402,6 +407,31 @@ void ReadGyro(int deltaTime) {
    #endif
 }
 
+void ReadSonar(){
+  // Trigger HIGH pulse of 10us
+  digitalWrite(sonarTrigPin, LOW);
+  delayMicroseconds(5);
+  digitalWrite(sonarTrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(sonarTrigPin, LOW);
+
+  // Read duration signal
+  pinMode(sonarEchoPin, INPUT);
+  float signalDuration = pulseIn(sonarEchoPin, HIGH);
+  // Convert to distance by multiplying by speed of sound, 
+  // accounting for returned wave by division of 2
+  // offset by 12.3cm to account for sensor positioning on robot
+  sonarDistance = (signalDuration/2.0)*0.0343 + 12.3;
+  //sonarDistance = 200;
+
+  #ifdef SONAR_DEBUG
+    Serial.print(" Sonar Distance: ");
+    Serial.println(sonarDistance);
+  #endif
+}
+
+
+// ============= BATTERY =========
 
 boolean is_battery_voltage_OK()
 {
