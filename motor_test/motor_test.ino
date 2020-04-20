@@ -1,5 +1,13 @@
 #include <Servo.h>
 
+HardwareSerial *SerialCom;
+const byte numChars = 5;
+char receivedChars[numChars];   // an array to store the received data
+
+boolean newData = false;
+
+
+
 const byte motor1Pin = 46;
 const byte motor3Pin = 47;
 const byte motor4Pin = 50;
@@ -9,9 +17,11 @@ Servo motor2;
 Servo motor3;
 Servo motor4;
 
-int speedMS = 100;
+int speedMS = 120;
 
 void setup() {
+  SerialCom = &Serial;
+  SerialCom->begin(115200);
   motor1.attach(motor1Pin);
   motor2.attach(motor2Pin);
   motor3.attach(motor3Pin);
@@ -19,7 +29,8 @@ void setup() {
 }
 
 void loop() {
-
+recvWithEndMarker();
+read_serial_command();
   if (is_battery_voltage_OK()){ 
     motor1.writeMicroseconds(1500 + speedMS);
     motor2.writeMicroseconds(1500 - speedMS);
@@ -32,6 +43,48 @@ void loop() {
     motor4.writeMicroseconds(1500);
   }
 }
+//Serial command pasing
+void read_serial_command()
+{
+  if (newData) {
+    if(receivedChars[0] == 's'){
+      SerialCom->println("stopping");    
+      speedMS = 0;
+    } else {
+      SerialCom->print("starting: ");
+      delay(2000);
+      speedMS = atoi(receivedChars);
+      SerialCom->println(speedMS);
+      
+    }
+    newData = false;
+  }
+}
+
+
+void recvWithEndMarker() {
+    static byte ndx = 0;
+    char endMarker = '\n';
+    char rc;
+   
+    while (Serial.available() > 0 && newData == false) {
+        rc = Serial.read();
+
+        if (rc != endMarker) {
+            receivedChars[ndx] = rc;
+            ndx++;
+            if (ndx >= numChars) {
+                ndx = numChars - 1;
+            }
+        }
+        else {
+            receivedChars[ndx] = '\0'; // terminate the string
+            ndx = 0;
+            newData = true;
+        }
+    }
+}
+
 
 boolean is_battery_voltage_OK()
 {

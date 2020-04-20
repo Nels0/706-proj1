@@ -20,7 +20,7 @@
 // ========= TODO =========
 /* better debugging?
  * drive forward
- * determine conversion factor between pulse and rotational vel of wheels
+ * determine conversion factor between pulse and rotational vel of wheels: 21.3!
  * gyro reading/calibrations
  * sonar reading
  * turning state
@@ -97,9 +97,9 @@ float kP_Vy = 100.0f;
 float kI_Vy = 0.0f;
 
 // Motors
-float L1 = 6;
-float L2 = 6.5;
-float Rw = 2;
+float L1 = 7.5; //distance from centre to front axe
+float L2 = 8.5; //distance from centre to left/right wheen centres
+float Rw = 2.25; //wheel radius in cm
 int maxSpeedValue = 200;
 int minSpeedValue = 100; 
 
