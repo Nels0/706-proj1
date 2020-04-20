@@ -136,7 +136,7 @@ void loop() {
     case STOPPED:
       machineState =  Stopped();
       break;
-  };
+  }
 }
 
 // ==================State machine functions=====================================
@@ -170,11 +170,12 @@ RUNNING_STATE Running() {
         actionState = MoveForward(deltaTime);
       break;
       
-    case MOVING_TURNING:
-      break;
+      case MOVING_TURNING:
+        actionState = Rotate(deltaTime);
+        break;
       
-    case STILL:
-      break;
+      case STILL:
+        break;
     }
   }
   
@@ -236,6 +237,26 @@ ACTION_STATE MoveForward(int deltaTime){
   }
 }
 
+// TODO - review by nelson
+// TODO - reset integral when new control thing is happening?
+ACTION_STATE Rotate(int deltaTime) {
+  float error = desiredAngle - currentAngle;
+  // If the angle is greater than 180, remove 360 to make it between 0 and -180
+  // If the angle is less than -180, add 360 to make it between 0 and 180
+  error = error + (error > 180) ? -360 : (error < -180) ? 360 : 0;
+
+  // TODO - add integral
+  float Wz = (kP_Wz * error);
+
+  MotorWrite(0, 0, Wz);
+
+  if (error < 0.5 && Wz < 5) { // TODO - change these values
+    turnCount++;
+    return MOVING_FORWARD;
+  } else {
+    return MOVING_TURNING;
+  }
+}
 
 float GetWz(int deltaTime) {
   static float I_Wz;
