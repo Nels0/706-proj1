@@ -1,8 +1,8 @@
 // ========================================================================
 // Defines and includes
 //#define NO_BATTERY_V_OK
-//#define GYRO_DEBUG
-#define IR_DEBUG 
+#define GYRO_DEBUG
+//#define IR_DEBUG 
 //#define MOTOR_DEBUG
 //#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
@@ -54,10 +54,10 @@ enum DEBUG {
 
 // ====================Pin assignments================================================
 //Sensors
-int gyroPin = A2;
+const byte gyroPin = A2;
 //IR
-int irFrontPin = A4;
-int irBackPin = A5;
+const byte irFrontPin = A4;
+const byte irBackPin = A5;
 //Sonar
 const byte sonarTrigPin = 17;
 const byte sonarEchoPin = 16;
@@ -77,16 +77,21 @@ Servo motor4;
 
 // STATE
 int turnCount = 0;
-float desiredAngle;
+float desiredAngle = 90;
 
 // SENSORS;
 float sonarDistance = 999;
-float currentAngle;
 
 float irFront;
 float irFrontBuffer[5];
 float irBack;
 float irBackBuffer[5];
+
+float gyroSupplyVoltage = 5;
+float gyroZeroVoltage = 0;
+float gyroSensitivity = 0.0070;
+float rotationThreshold = 1;
+float currentAngle = 0;
 
 
 // GAINS
@@ -147,6 +152,8 @@ RUNNING_STATE Initialising() {
   SerialCom->println("INITIALISING...");
   delay(500);
   EnableMotors();
+  IrSetup();
+  GyroSetup();
   SerialCom->println("RUNNING STATE...");
   return RUNNING;
 }
@@ -154,7 +161,7 @@ RUNNING_STATE Initialising() {
 
 
 RUNNING_STATE Running() {
-  static ACTION_STATE actionState = MOVING_FORWARD;
+  static ACTION_STATE actionState = STILL;
   
   static unsigned long lastMillis;  
   unsigned int deltaTime = millis() - lastMillis;
@@ -220,7 +227,7 @@ ACTION_STATE MoveForward(int deltaTime){
 
   float Wz = GetWz(deltaTime);
   float Vy = GetVy(deltaTime);
-  float Vx = -10.0f;//get_Vx(deltaTime); 
+  float Vx = 10.0f;//get_Vx(deltaTime); 
   
   MotorWrite(Vx, Vy, Wz);
 
@@ -256,6 +263,13 @@ ACTION_STATE Rotate(int deltaTime) {
   } else {
     return MOVING_TURNING;
   }
+}
+
+ACTION_STATE Still () {
+  MotorWrite(0, 0, 0);
+
+  return STILL;
+
 }
 
 float GetWz(int deltaTime) {
@@ -327,12 +341,28 @@ void IrSetup(){
   //Filter part
 }
 
+void GyroSetup() {
+  int i;
+  int gyroValue;
+  float sum = 0;    
+  pinMode(gyroPin,INPUT);
+  Serial.println("Getting the gyro zero voltage...");
+  //  read 100 values of voltage when gyro is at still, to calculate the zero-drift
+  for (i=0; i<100; i++) {  
+    gyroValue = analogRead(gyroPin);  
+    sum += gyroValue;  
+    delay(5);
+  }
+  gyroZeroVoltage = sum/100;
+  Serial.println("Gyro Calibrated!");
+}
+
 
 
 //========== SENSOR READINGs===========
 void ReadSensors(int deltaTime){
   
-  //GYRO_reading(deltaTime);
+  ReadGyro(deltaTime);
   ReadIR(irFrontPin, irFront, irFrontBuffer);
   ReadIR(irBackPin, irBack, irBackBuffer);
   //sonar_reading();
@@ -345,6 +375,31 @@ void ReadIR(int irPin, float &value, float irBuffer[]){
     Serial.print(": ");
     Serial.println(value);
   #endif
+}
+
+void ReadGyro(int deltaTime) {
+  //OoO to preserve precision
+  float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
+  angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
+  
+  if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
+    // we are running a loop in T. one second will run (1000/T).  
+    float angleChange = angularVelocity * deltaTime / 1000.0f; 
+    currentAngle -= angleChange; // Negative due to right handed coordinate system
+  }
+
+  // keep the angle between 0-360
+  if (currentAngle < 0)    
+    currentAngle += 360;
+  else if (currentAngle > 359)
+    currentAngle -= 360;
+
+  #ifdef GYRO_DEBUG
+    Serial.print(" Angular Velocity: ");
+    Serial.print(angularVelocity);
+    Serial.print(" Current Angle: ");
+    Serial.println(currentAngle);
+   #endif
 }
 
 
