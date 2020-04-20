@@ -20,7 +20,6 @@
 // ========= TODO =========
 /* better debugging?
  * drive forward
- * determine conversion factor between pulse and rotational vel of wheels: 21.3!
  * gyro reading/calibrations
  * sonar reading
  * turning state
@@ -91,17 +90,18 @@ float irBackBuffer[5];
 
 
 // GAINS
-float kP_Wz = 3.0f;
+float kP_Wz = 1.5f;
 float kI_Wz = 0.0f;
-float kP_Vy = 100.0f;
+float kP_Vy = 1.0f;
 float kI_Vy = 0.0f;
 
 // Motors
+float omegaToPulse = 21.3;
 float L1 = 7.5; //distance from centre to front axe
 float L2 = 8.5; //distance from centre to left/right wheen centres
 float Rw = 2.25; //wheel radius in cm
-int maxSpeedValue = 200;
-int minSpeedValue = 100; 
+int maxSpeedValue = 250;
+int minSpeedValue = 0; 
 
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
@@ -220,7 +220,7 @@ ACTION_STATE MoveForward(int deltaTime){
 
   float Wz = GetWz(deltaTime);
   float Vy = GetVy(deltaTime);
-  float Vx = 1000.0f;//get_Vx(deltaTime); 
+  float Vx = -10.0f;//get_Vx(deltaTime); 
   
   MotorWrite(Vx, Vy, Wz);
 
@@ -282,15 +282,14 @@ void EnableMotors(){
 }
 
 void MotorWrite(float Vx, float Vy, float Wz){
-  float _Vx = Sat2(Vx, 60, 0);
-  float _Vy = Sat2(Vy, 60, 0);
-  float _Wz = Sat2(Wz, 100, 0);
+  float _Vx = Sat2(Vx, 20, 0);
+  float _Vy = Sat2(Vy, 20, 0);
+  float _Wz = Sat2(Wz, 20, 0);
 
-  //TODO: Conversion factor for cm/s to pulse width!!
-  int motor1Speed = KinematicCalc(_Vx,  _Vy, -_Wz);
-  int motor2Speed = KinematicCalc(_Vx, -_Vy,  _Wz);
-  int motor3Speed = KinematicCalc(_Vx, -_Vy, -_Wz);
-  int motor4Speed = KinematicCalc(_Vx,  _Vy,  _Wz);
+  int motor1Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy, -_Wz);
+  int motor2Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy,  _Wz);
+  int motor3Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy, -_Wz);
+  int motor4Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy,  _Wz);
 
   motor1.writeMicroseconds(1500 + Sat2(motor1Speed, maxSpeedValue, minSpeedValue));
   motor2.writeMicroseconds(1500 - Sat2(motor2Speed, maxSpeedValue, minSpeedValue));
