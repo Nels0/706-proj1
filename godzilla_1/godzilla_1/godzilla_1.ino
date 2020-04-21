@@ -82,6 +82,7 @@ float signal_duration = 0.0f;
 //Kalman Filter
 double process_noise = 1;
 double sensor_noise = 1;
+float prev_Gyro = 0;
 
 
 // Speed
@@ -554,12 +555,18 @@ void GYRO_reading(int currentLoopTime) {
   else if (currentAngle > 359)
     currentAngle -= 360;
 
+   currentAngle = kalman_filter(currentAngle, prev_Gyro);
+   prev_Gyro = currentAngle;
+
+
   #ifdef GYRO_DEBUG
     Serial.print(" Angular Velocity: ");
     Serial.print(angularVelocity);
     Serial.print(" Current Angle: ");
     Serial.println(currentAngle);
    #endif
+
+   
 }
 
 // =========================================================================
