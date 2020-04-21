@@ -6,6 +6,7 @@
 //#define MOTOR_DEBUG
 //#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
+//#define KALMAN_DEBUG
 #include <Servo.h>
 
 // =========================================================================
@@ -77,6 +78,11 @@ float srIRBackFiltered = 0;
 //Sonar
 float sonar_distance = 0.0f;
 float signal_duration = 0.0f;
+
+//Kalman Filter
+double process_noise = 1;
+double sensor_noise = 1;
+
 
 // Speed
 int L1 = 1;
@@ -420,6 +426,31 @@ void sonar_reading(){
     Serial.print(" Sonar Distance: ");
     Serial.println(sonar_distance);
   #endif
+}
+
+// =========================================================================
+// Kalman Filter Function
+
+double kalman_filter(double raw_reading, double prev_est)
+{
+  double pri_est, pri_var, post_est, post_var, gain;
+
+  pri_est = prev_est;
+  pri_var = process_noise;
+
+  gain  = pri_var/(pri_var+sensor_noise);
+  post_est = pri_est + gain*(raw_reading-pri_est);
+  post_var = (1 - gain)*pri_var;
+ 
+  #ifdef KALMAN_DEBUG
+    Serial.print(" Gain: ");
+    Serial.print(gain);
+    Serial.print(" Post Variance: ");
+    Serial.print(post_var);
+    Serial.print(" Post Estimate: ");
+    Serial.println(post_est);
+  #endif
+  
 }
 
 // =========================================================================
