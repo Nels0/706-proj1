@@ -4,8 +4,9 @@
 //#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
-//#define SONAR_DEBUG
+#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
+#define STATE_DEBUG
 #include <Servo.h>
 
 /* |      ____=____
@@ -80,7 +81,7 @@ int turnCount = 0;
 float desiredAngle = 90;
 
 // SENSORS;
-float sonarDistance = 999;
+float sonarDistance;
 
 float irFront;
 float irFrontBuffer[5];
@@ -95,7 +96,7 @@ float currentAngle = 0;
 
 
 // GAINS
-float kP_Wz = 1.5f;
+float kP_Wz = 0.5f;
 float kI_Wz = 0.0f;
 float kP_Vy = 1.0f;
 float kI_Vy = 0.0f;
@@ -111,6 +112,9 @@ int minSpeedValue = 0;
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
 HardwareSerial *SerialCom;
+
+ACTION_STATE actionState = MOVING_FORWARD;
+RUNNING_STATE machineState = INITIALISING;
 
 
 void setup() {
@@ -129,7 +133,15 @@ void setup() {
 
 void loop() {
 
-  static RUNNING_STATE machineState = INITIALISING;
+
+
+  
+  #ifdef STATE_DEBUG
+    SerialCom->print("Machine State: ");
+    SerialCom->println(machineState);
+    SerialCom->print("Action State: ");
+    SerialCom->println(actionState);
+  #endif
   
   switch (machineState) {
     case INITIALISING:
@@ -161,11 +173,13 @@ RUNNING_STATE Initialising() {
 
 
 RUNNING_STATE Running() {
-  static ACTION_STATE actionState = STILL;
   
   static unsigned long lastMillis;  
   unsigned int deltaTime = millis() - lastMillis;
 
+  
+
+  
   if (deltaTime >= loopTime) {
     
     lastMillis = millis();
@@ -182,6 +196,7 @@ RUNNING_STATE Running() {
         break;
       
       case STILL:
+        actionState = Still();
         break;
     }
   }
@@ -233,10 +248,10 @@ ACTION_STATE MoveForward(int deltaTime){
 
 
   if(sonarDistance < 15){
-    if(turnCount < 3){
+    if(turnCount >= 3){
       return STILL;
     } else {
-      desiredAngle = currentAngle + 90;
+      desiredAngle = currentAngle - 90;
       return MOVING_TURNING;
     }
   } else {
@@ -266,8 +281,9 @@ ACTION_STATE Rotate(int deltaTime) {
 }
 
 ACTION_STATE Still () {
+  
   MotorWrite(0, 0, 0);
-
+  
   return STILL;
 
 }
@@ -445,6 +461,7 @@ boolean is_battery_voltage_OK()
   //to about 4.20-4.25V (fully charged) = 860(4.2V Max)
   //Lipo Cell voltage should never go below 3V, So 3.5V is a safety factor.
   raw_lipo = analogRead(A0);
+  //Serial.println(raw_lipo * 5 / 1023);
   Lipo_level_cal = (raw_lipo - 717);
   Lipo_level_cal = Lipo_level_cal * 100;
   Lipo_level_cal = Lipo_level_cal / 143;
