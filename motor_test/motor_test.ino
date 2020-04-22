@@ -18,6 +18,14 @@ Servo motor3;
 Servo motor4;
 
 int speedMS = 120;
+float w = 0.0005;
+
+float omegaToPulse = 21.3;
+int maxSpeedValue = 250;
+int minSpeedValue = 0; 
+float L1 = 7.5; //distance from centre to front axe
+float L2 = 8.5; //distance from centre to left/right wheen centres
+float Rw = 2.25; //wheel radius in cm
 
 void setup() {
   SerialCom = &Serial;
@@ -31,6 +39,16 @@ void setup() {
 void loop() {
 recvWithEndMarker();
 read_serial_command();
+
+  float A = 20;
+
+
+  float Vx = A * cos( w * millis());
+  float Vy = A * sin( w * millis());
+
+  MotorWrite(Vx, Vy, 0);
+  
+/*
   if (is_battery_voltage_OK()){ 
     motor1.writeMicroseconds(1500 + speedMS);
     motor2.writeMicroseconds(1500 - speedMS);
@@ -42,6 +60,7 @@ read_serial_command();
     motor3.writeMicroseconds(1500);
     motor4.writeMicroseconds(1500);
   }
+  */
 }
 //Serial command pasing
 void read_serial_command()
@@ -53,7 +72,7 @@ void read_serial_command()
     } else {
       SerialCom->print("starting: ");
       delay(2000);
-      speedMS = atoi(receivedChars);
+      w = atoi(receivedChars);
       SerialCom->println(speedMS);
       
     }
@@ -83,6 +102,44 @@ void recvWithEndMarker() {
             newData = true;
         }
     }
+}
+
+void MotorWrite(float Vx, float Vy, float Wz){
+  float _Vx = Sat2(Vx, 20, 0);
+  float _Vy = Sat2(Vy, 20, 0);
+  float _Wz = Sat2(Wz, 20, 0);
+
+  int motor1Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy, -_Wz);
+  int motor2Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy,  _Wz);
+  int motor3Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy, -_Wz);
+  int motor4Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy,  _Wz);
+
+  motor1.writeMicroseconds(1500 + Sat2(motor1Speed, maxSpeedValue, minSpeedValue));
+  motor2.writeMicroseconds(1500 - Sat2(motor2Speed, maxSpeedValue, minSpeedValue));
+  motor3.writeMicroseconds(1500 + Sat2(motor3Speed, maxSpeedValue, minSpeedValue));
+  motor4.writeMicroseconds(1500 - Sat2(motor4Speed, maxSpeedValue, minSpeedValue));
+}
+
+int KinematicCalc(int Vx, int Vy, int Wz) {
+    return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
+}
+
+int Sat2(int value, int maxValue, int minValue) {
+  // Will clamp the value if the value is outside the maximum ranges
+  if (value < -maxValue)
+    return -maxValue;
+  else if (value > maxValue)
+    return maxValue;
+  else
+    return value;
+
+  // Will clamp if the value is too close to zero
+  if (value < minValue)
+    return 0;
+  else if (value > -minValue) 
+    return 0;
+  else 
+    return value; 
 }
 
 
