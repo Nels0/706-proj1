@@ -265,7 +265,10 @@ ACTION_STATE Rotate(int deltaTime) {
   float error = desiredAngle - currentAngle;
   // If the angle is greater than 180, remove 360 to make it between 0 and -180
   // If the angle is less than -180, add 360 to make it between 0 and 180
-  error = error + (error > 180) ? -360 : (error < -180) ? 360 : 0;
+  if (error > 180)
+    error = error - 360;
+  else if (error < -180)
+    error = error + 360;
 
   // TODO - add integral
   float Wz = (kP_Wz * error);
