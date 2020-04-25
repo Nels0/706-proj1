@@ -106,8 +106,8 @@ float omegaToPulse = 21.3;
 float L1 = 7.5; //distance from centre to front axe
 float L2 = 8.5; //distance from centre to left/right wheen centres
 float Rw = 2.25; //wheel radius in cm
-int maxSpeedValue = 250;
-int minSpeedValue = 0; 
+int maxPulseValue = 250;
+int minPulseValue = 0; 
 
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
@@ -319,15 +319,15 @@ void MotorWrite(float Vx, float Vy, float Wz){
   float _Vy = Sat2(Vy, 20, 0);
   float _Wz = Sat2(Wz, 20, 0);
 
-  int motor1Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy, -_Wz);
-  int motor2Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy,  _Wz);
-  int motor3Speed = omegaToPulse * KinematicCalc(_Vx, -_Vy, -_Wz);
-  int motor4Speed = omegaToPulse * KinematicCalc(_Vx,  _Vy,  _Wz);
+  int motor1Pulse = omegaToPulse * KinematicCalc(_Vx,  _Vy, -_Wz);
+  int motor2Pulse = omegaToPulse * KinematicCalc(_Vx, -_Vy,  _Wz);
+  int motor3Pulse = omegaToPulse * KinematicCalc(_Vx, -_Vy, -_Wz);
+  int motor4Pulse = omegaToPulse * KinematicCalc(_Vx,  _Vy,  _Wz);
 
-  motor1.writeMicroseconds(1500 + Sat2(motor1Speed, maxSpeedValue, minSpeedValue));
-  motor2.writeMicroseconds(1500 - Sat2(motor2Speed, maxSpeedValue, minSpeedValue));
-  motor3.writeMicroseconds(1500 + Sat2(motor3Speed, maxSpeedValue, minSpeedValue));
-  motor4.writeMicroseconds(1500 - Sat2(motor4Speed, maxSpeedValue, minSpeedValue));
+  motor1.writeMicroseconds(1500 + Sat2(motor1Pulse, maxPulseValue, minPulseValue));
+  motor2.writeMicroseconds(1500 - Sat2(motor2Pulse, maxPulseValue, minPulseValue));
+  motor3.writeMicroseconds(1500 + Sat2(motor3Pulse, maxPulseValue, minPulseValue));
+  motor4.writeMicroseconds(1500 - Sat2(motor4Pulse, maxPulseValue, minPulseValue));
 }
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
