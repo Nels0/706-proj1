@@ -4,9 +4,9 @@
 //#define GYRO_DEBUG
 #define IR_DEBUG 
 //#define MOTOR_DEBUG
-//#define SONAR_DEBUG
+#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
-//#define STATE_DEBUG
+#define STATE_DEBUG
 #include <Servo.h>
 
 /* |      ____=____
@@ -19,7 +19,7 @@
  */
 
 // ========= TODO =========
-/* done Kalman on Gyro
+/* Kalman on Gyro
  * done Only read sonar every 60ms
  * sonar forward vel control
  * done moving average filter
@@ -82,13 +82,13 @@ float desiredAngle = 90;
 // SENSORS;
 
 //  SONAR
-int sonarRiseMicros;
-float sonarDistance;
+long sonarRiseMicros;
+float sonarDistance = 999;
 int lastPing = 0;
 
 
 //  IR
-#define BUFFERLENGTH 10
+#define BUFFERLENGTH 20
 
 int irFrontidx = 0;
 float irFront = 0;
@@ -115,7 +115,7 @@ float kP_Wz = 0.5f;
 float kI_Wz = 0.0f;
 float kP_Vy = 1.0f;
 float kI_Vy = 0.0f;
-float kP_Vx = 1.0f;
+float kP_Vx = 4.0f;
 float kI_Vx = 0.0f;
 
 float kP_Wz2 = 0.1f;
@@ -146,7 +146,6 @@ void setup() {
   SerialCom->println(" \\____|_| \\_\\\\___/ \\___/|_|     |_|");
   delay(1000);
   SerialCom->println("Setup....");
-  delay(1000);
 
 }
 
@@ -184,6 +183,7 @@ RUNNING_STATE Initialising() {
   GyroSetup();
   SonarSetup();
   SerialCom->println("RUNNING STATE...");
+  //To allow things to settle
   return RUNNING;
 }
 
@@ -260,7 +260,7 @@ ACTION_STATE MoveForward(int deltaTime){
 
   float Wz = GetWz(deltaTime);
   float Vy = GetVy(deltaTime);
-  float Vx = 10.0f;//get_Vx(deltaTime); 
+  float Vx = GetVx(deltaTime);//10.0f; 
   
   MotorWrite(Vx, Vy, Wz);
 
@@ -394,6 +394,8 @@ void SonarSetup(){
 
   //Attach interrupt to echo pin
   attachInterrupt(digitalPinToInterrupt(sonarEchoPin), echoRead, CHANGE);
+  PingSonar();
+  
 }
 
 void GyroSetup() {
@@ -447,7 +449,7 @@ void ReadSensors(int deltaTime){
 
 void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
   //NOTE: All "values" in buffer are divided by buffer length
-  /*
+  
   float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
 
   //n.b first 5 
@@ -459,15 +461,15 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
   //overwrite new number in buffer
   irBuffer[idx] = newValue;
   //increment buffer index
-  if (idx < BUFFERLENGTH){
+  if (idx < BUFFERLENGTH - 1){
     idx++;
   } else {
     idx = 0;
   }
   
-  */
+  
 
-  value = 448.35f * pow(analogRead(irPin), -0.593f);  
+  // value = 448.35f * pow(analogRead(irPin), -0.593f);  
   #ifdef IR_DEBUG
     Serial.print(irPin);
     Serial.print(": ");
@@ -541,17 +543,17 @@ void echoRead(){
 
   } else {
     
-    int signalDuration = micros() - sonarRiseMicros;
+    long signalDuration = micros() - sonarRiseMicros;
 
     
-    if(signalDuration != 0 ){
-      sonarDistance = (signalDuration/2.0)*0.0343 + 12.3;
+    if(signalDuration > 0 ){
+      sonarDistance = (signalDuration/2.0)*0.0343 + 7.5;
       //sonarDistance = 200;
     }
     
       // Convert to distance by multiplying by speed of sound, 
       // accounting for returned wave by division of 2
-      // offset by 12.3cm to account for sensor positioning on robot
+      // offset by 7.5cm to account for sensor positioning on robot
   }
 }
 
