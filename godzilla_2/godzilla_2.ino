@@ -2,11 +2,12 @@
 // Defines and includes
 //#define NO_BATTERY_V_OK
 //#define GYRO_DEBUG
-#define IR_DEBUG 
+//#define IR_DEBUG 
 //#define MOTOR_DEBUG
-#define SONAR_DEBUG
+//#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
-#define STATE_DEBUG
+//#define STATE_DEBUG
+//#define KALMAN_DEBUG
 #include <Servo.h>
 
 /* |      ____=____
@@ -19,12 +20,7 @@
  */
 
 // ========= TODO =========
-/* Kalman on Gyro
- * done Only read sonar every 60ms
- * sonar forward vel control
- * done moving average filter
- * done loop time
- * integral windup
+/* integral windup
  * speed eval?
  */
 
@@ -128,6 +124,7 @@ float Rw = 2.25; //wheel radius in cm
 int maxPulseValue = 250;
 int minPulseValue = 90; 
 
+// Hardware
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
 HardwareSerial *SerialCom;
@@ -183,7 +180,6 @@ RUNNING_STATE Initialising() {
   GyroSetup();
   SonarSetup();
   SerialCom->println("RUNNING STATE...");
-  //To allow things to settle
   return RUNNING;
 }
 
@@ -194,14 +190,9 @@ RUNNING_STATE Running() {
   static unsigned long lastMillis;  
   unsigned int deltaTime = millis() - lastMillis;
 
-  
-
-  
   if (deltaTime >= loopTime) {
-
     
     lastMillis = millis();
-       
     ReadSensors(deltaTime);
 
     switch (actionState) {
@@ -223,7 +214,6 @@ RUNNING_STATE Running() {
   return RUNNING;  
 }
 
-//TODO: fix variable naming
 RUNNING_STATE Stopped() {
   static byte counter_lipo_voltage_ok;
   static unsigned long previous_millis;
@@ -277,8 +267,6 @@ ACTION_STATE MoveForward(int deltaTime){
   }
 }
 
-// TODO - review by nelson
-// TODO - reset integral when new control thing is happening?
 ACTION_STATE Rotate(int deltaTime) {
   float error = desiredAngle - currentAngle;
   // If the angle is greater than 180, remove 360 to make it between 0 and -180
@@ -293,7 +281,7 @@ ACTION_STATE Rotate(int deltaTime) {
 
   MotorWrite(0, 0, Wz);
 
-  if (abs(error) < 0.5 && Wz < 5) { // TODO - change these values
+  if (abs(error) < 0.5 && Wz < 5) { // TODO - tune these values
     turnCount++;
     return MOVING_FORWARD;
   } else {
@@ -306,7 +294,6 @@ ACTION_STATE Still () {
   MotorWrite(0, 0, 0);
   
   return STILL;
-
 }
 
 float GetWz(int deltaTime) {
@@ -415,7 +402,7 @@ void GyroSetup() {
 }
 
 //====== KALMAN FILTER FUNCTION ===========
-double kalman_filter(double raw_reading, double prev_est)
+double KalmanFilter(double raw_reading, double prev_est)
 {
   double pri_est, pri_var, post_est, post_var, gain;
 
@@ -424,7 +411,6 @@ double kalman_filter(double raw_reading, double prev_est)
 
   gain  = pri_var/(pri_var+sensor_noise);
   post_est = pri_est + gain*(raw_reading-pri_est);
-  post_var = (1 - gain)*pri_var;
  
   #ifdef KALMAN_DEBUG
     Serial.print(" Gain: ");
@@ -435,24 +421,26 @@ double kalman_filter(double raw_reading, double prev_est)
     Serial.println(post_est);
   #endif
   
+  
+  return post_est;
+  
 }
 //========== SENSOR READINGs===========
 void ReadSensors(int deltaTime){
   ReadGyro(deltaTime);
   ReadIR(irFrontPin, irFront, irFrontBuffer, irFrontidx);
   ReadIR(irBackPin, irBack, irBackBuffer, irBackidx);
-  #ifdef IR_DEBUG
+  #ifdef IR_DEBUG //formatting
     Serial.println(" ");
   #endif
   PingSonar();
 }
 
 void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
-  //NOTE: All "values" in buffer are divided by buffer length
-  
+  //NOTE: All "values" in buffer are divided by buffer length  
   float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
 
-  //n.b first 5 
+  //n.b first 5 values will be off due to zero-initialisation
   
   //subtract last number from average
   value -= irBuffer[idx];  
@@ -486,10 +474,10 @@ void ReadGyro(int deltaTime) {
   //OoO to preserve precision
   float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
   angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
-/*
-  currentAngle = kalman_filter(angularVelocity, prev_Gyro);
+
+  angularVelocity = KalmanFilter(angularVelocity, prev_Gyro);
   prev_Gyro = angularVelocity;
-  */
+  
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
     // we are running a loop in T. one second will run (1000/T).  
     float angleChange = angularVelocity * deltaTime / 1000.0f; 
