@@ -4,9 +4,9 @@
 //#define GYRO_DEBUG
 //#define IR_DEBUG 
 //#define MOTOR_DEBUG
-#define SONAR_DEBUG
+//#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
-#define STATE_DEBUG
+//#define STATE_DEBUG
 #include <Servo.h>
 
 /* |      ____=____
@@ -19,14 +19,13 @@
  */
 
 // ========= TODO =========
-/* better debugging?
- * drive forward
- * gyro reading/calibrations
- * sonar reading
- * turning state
+/* done Kalman on Gyro
+ * done Only read sonar every 60ms
+ * sonar forward vel control
+ * done moving average filter
+ * done loop time
  * integral windup
- * still state
- * 
+ * speed eval?
  */
 
 // ======================Enums===================================================
@@ -61,7 +60,7 @@ const byte irFrontPin = A4;
 const byte irBackPin = A5;
 //Sonar
 const byte sonarTrigPin = 17;
-const byte sonarEchoPin = 16;
+const byte sonarEchoPin = 18;
 //Motors
 const byte motor1Pin = 46;
 const byte motor3Pin = 47;
@@ -81,12 +80,17 @@ int turnCount = 0;
 float desiredAngle = 90;
 
 // SENSORS;
+int sonarRiseMicros;
 float sonarDistance;
+int lastPing = 0;
 
+#define BUFFERLENGTH 5
+byte irFrontidx = 0;
 float irFront;
-float irFrontBuffer[5];
+float irFrontBuffer[BUFFERLENGTH];
+byte irBackidx = 0;
 float irBack;
-float irBackBuffer[5];
+float irBackBuffer[BUFFERLENGTH];
 
 float gyroSupplyVoltage = 5;
 float gyroZeroVoltage = 0;
@@ -94,12 +98,19 @@ float gyroSensitivity = 0.0070;
 float rotationThreshold = 1;
 float currentAngle = 0;
 
+//Kalman Filter
+double process_noise = 1;
+double sensor_noise = 1;
+float prev_Gyro = 0;
 
 // GAINS
 float kP_Wz = 0.5f;
 float kI_Wz = 0.0f;
 float kP_Vy = 1.0f;
 float kI_Vy = 0.0f;
+
+
+float kP_Wz2 = 0.1f;
 
 // Motors
 float omegaToPulse = 21.3;
@@ -109,7 +120,7 @@ float Rw = 2.25; //wheel radius in cm
 int maxSpeedValue = 250;
 int minSpeedValue = 0; 
 
-int loopTime = 10; // Time for each loop in ms
+int loopTime = 1; // Time for each loop in ms
 DEBUG debug_level = NONE;
 HardwareSerial *SerialCom;
 
@@ -164,8 +175,10 @@ RUNNING_STATE Initialising() {
   SerialCom->println("INITIALISING...");
   delay(500);
   EnableMotors();
-  IrSetup();
+  IrSetup(irFrontPin, irFrontBuffer);  
+  IrSetup(irBackPin, irBackBuffer);
   GyroSetup();
+  SonarSetup();
   SerialCom->println("RUNNING STATE...");
   return RUNNING;
 }
@@ -181,11 +194,12 @@ RUNNING_STATE Running() {
 
   
   if (deltaTime >= loopTime) {
+
     
     lastMillis = millis();
-    
+       
     ReadSensors(deltaTime);
-    
+
     switch (actionState) {
       case MOVING_FORWARD:
         actionState = MoveForward(deltaTime);
@@ -271,11 +285,11 @@ ACTION_STATE Rotate(int deltaTime) {
     error = error + 360;
 
   // TODO - add integral
-  float Wz = (kP_Wz * error);
+  float Wz = (kP_Wz2 * error);
 
   MotorWrite(0, 0, Wz);
 
-  if (error < 0.5 && Wz < 5) { // TODO - change these values
+  if (abs(error) < 0.5 && Wz < 5) { // TODO - change these values
     turnCount++;
     return MOVING_FORWARD;
   } else {
@@ -353,16 +367,21 @@ int Sat2(int value, int maxValue, int minValue) {
 }
 
 //========== SENSOR SETUP =============
-void IrSetup(){
-  pinMode(irFrontPin,INPUT); 
-  pinMode(irBackPin,INPUT);
+void IrSetup(byte irPin, float irBuffer[]){
+  pinMode(irPin,INPUT); 
 
   //Filter part
+  for (int thisReading = 0; thisReading < 5; thisReading++) {
+    irBuffer[thisReading] = 0;
+  }
 }
 
 void SonarSetup(){
   pinMode(sonarTrigPin, OUTPUT);
   pinMode(sonarEchoPin, INPUT);
+
+  //Attach interrupt to echo pin
+  attachInterrupt(digitalPinToInterrupt(sonarEchoPin), echoRead, CHANGE);
 }
 
 void GyroSetup() {
@@ -381,19 +400,56 @@ void GyroSetup() {
   Serial.println("Gyro Calibrated!");
 }
 
+//====== KALMAN FILTER FUNCTION ===========
+double kalman_filter(double raw_reading, double prev_est)
+{
+  double pri_est, pri_var, post_est, post_var, gain;
 
+  pri_est = prev_est;
+  pri_var = process_noise;
 
+  gain  = pri_var/(pri_var+sensor_noise);
+  post_est = pri_est + gain*(raw_reading-pri_est);
+  post_var = (1 - gain)*pri_var;
+ 
+  #ifdef KALMAN_DEBUG
+    Serial.print(" Gain: ");
+    Serial.print(gain);
+    Serial.print(" Post Variance: ");
+    Serial.print(post_var);
+    Serial.print(" Post Estimate: ");
+    Serial.println(post_est);
+  #endif
+  
+}
 //========== SENSOR READINGs===========
 void ReadSensors(int deltaTime){
-  
   ReadGyro(deltaTime);
-  ReadIR(irFrontPin, irFront, irFrontBuffer);
-  ReadIR(irBackPin, irBack, irBackBuffer);
-  ReadSonar();
+  ReadIR(irFrontPin, irFront, irFrontBuffer, irFrontidx);
+  ReadIR(irBackPin, irBack, irBackBuffer, irBackidx);
+  PingSonar();
 }
 
-void ReadIR(int irPin, float &value, float irBuffer[]){
-  value = 448.35f * pow(analogRead(irPin), -0.593f);
+void ReadIR(int irPin, float &value, float irBuffer[], byte idx){
+  //NOTE: All "values" in buffer are divided by buffer length
+  float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
+
+  //n.b first 5 
+  
+  //subtract last number from average
+  value -= irBuffer[idx];  
+  //add new number to average
+  value += newValue;
+  //overwrite new number in buffer
+  irBuffer[idx] = newValue;
+  //increment buffer index
+  if (idx < BUFFERLENGTH){
+    idx++;
+  } else {
+    idx = 0;
+  }
+  
+  
   #ifdef IR_DEBUG
     Serial.print(irPin);
     Serial.print(": ");
@@ -402,10 +458,16 @@ void ReadIR(int irPin, float &value, float irBuffer[]){
 }
 
 void ReadGyro(int deltaTime) {
+
+
+  
   //OoO to preserve precision
   float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
   angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
-  
+/*
+  currentAngle = kalman_filter(angularVelocity, prev_Gyro);
+  prev_Gyro = angularVelocity;
+  */
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
     // we are running a loop in T. one second will run (1000/T).  
     float angleChange = angularVelocity * deltaTime / 1000.0f; 
@@ -418,6 +480,8 @@ void ReadGyro(int deltaTime) {
   else if (currentAngle > 359)
     currentAngle -= 360;
 
+  
+
   #ifdef GYRO_DEBUG
     Serial.print(" Angular Velocity: ");
     Serial.print(angularVelocity);
@@ -426,27 +490,49 @@ void ReadGyro(int deltaTime) {
    #endif
 }
 
-void ReadSonar(){
-  // Trigger HIGH pulse of 10us
-  digitalWrite(sonarTrigPin, LOW);
-  delayMicroseconds(5);
-  digitalWrite(sonarTrigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(sonarTrigPin, LOW);
+void PingSonar(){
+  
+  if (millis()-lastPing > 60){
+    lastPing = millis();
+    // Trigger HIGH pulse of 10us
+    digitalWrite(sonarTrigPin, LOW);
+    delayMicroseconds(5);
+    digitalWrite(sonarTrigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(sonarTrigPin, LOW);
+ 
 
-  // Read duration signal
-  pinMode(sonarEchoPin, INPUT);
-  float signalDuration = pulseIn(sonarEchoPin, HIGH);
-  // Convert to distance by multiplying by speed of sound, 
-  // accounting for returned wave by division of 2
-  // offset by 12.3cm to account for sensor positioning on robot
-  sonarDistance = (signalDuration/2.0)*0.0343 + 12.3;
-  //sonarDistance = 200;
+    
+    #ifdef SONAR_DEBUG
+      Serial.print("Sonar Distance: ");
+      Serial.println(sonarDistance);
+    #endif
+  }
+}
 
-  #ifdef SONAR_DEBUG
-    Serial.print(" Sonar Distance: ");
-    Serial.println(sonarDistance);
-  #endif
+
+
+
+void echoRead(){
+
+  if(digitalRead(sonarEchoPin) == HIGH){
+    
+    sonarRiseMicros = micros();  
+
+  } else {
+    
+    int signalDuration = micros() - sonarRiseMicros;
+
+    
+    if(signalDuration != 0 ){
+      sonarDistance = (signalDuration/2.0)*0.0343 + 12.3;
+      //sonarDistance = 200;
+    }
+    
+      // Convert to distance by multiplying by speed of sound, 
+      // accounting for returned wave by division of 2
+      // offset by 12.3cm to account for sensor positioning on robot
+  }
 }
 
 
