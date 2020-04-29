@@ -2,7 +2,7 @@
 // Defines and includes
 //#define NO_BATTERY_V_OK
 //#define GYRO_DEBUG
-//#define IR_DEBUG 
+#define IR_DEBUG 
 //#define MOTOR_DEBUG
 //#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
@@ -80,18 +80,25 @@ int turnCount = 0;
 float desiredAngle = 90;
 
 // SENSORS;
+
+//  SONAR
 int sonarRiseMicros;
 float sonarDistance;
 int lastPing = 0;
 
-#define BUFFERLENGTH 5
-byte irFrontidx = 0;
-float irFront;
+
+//  IR
+#define BUFFERLENGTH 10
+
+int irFrontidx = 0;
+float irFront = 0;
 float irFrontBuffer[BUFFERLENGTH];
-byte irBackidx = 0;
-float irBack;
+
+int irBackidx = 0;
+float irBack = 0;
 float irBackBuffer[BUFFERLENGTH];
 
+//  GYRO 
 float gyroSupplyVoltage = 5;
 float gyroZeroVoltage = 0;
 float gyroSensitivity = 0.0070;
@@ -118,9 +125,9 @@ float L1 = 7.5; //distance from centre to front axe
 float L2 = 8.5; //distance from centre to left/right wheen centres
 float Rw = 2.25; //wheel radius in cm
 int maxSpeedValue = 250;
-int minSpeedValue = 0; 
+int minSpeedValue = 90; 
 
-int loopTime = 1; // Time for each loop in ms
+int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
 HardwareSerial *SerialCom;
 
@@ -143,9 +150,6 @@ void setup() {
 }
 
 void loop() {
-
-
-
   
   #ifdef STATE_DEBUG
     SerialCom->print("Machine State: ");
@@ -173,7 +177,6 @@ void loop() {
 // ========== MACHINE STATES=======
 RUNNING_STATE Initialising() {
   SerialCom->println("INITIALISING...");
-  delay(500);
   EnableMotors();
   IrSetup(irFrontPin, irFrontBuffer);  
   IrSetup(irBackPin, irBackBuffer);
@@ -371,8 +374,8 @@ void IrSetup(byte irPin, float irBuffer[]){
   pinMode(irPin,INPUT); 
 
   //Filter part
-  for (int thisReading = 0; thisReading < 5; thisReading++) {
-    irBuffer[thisReading] = 0;
+  for (int i = 0; i < BUFFERLENGTH; i++) {
+    irBuffer[i] = 0;
   }
 }
 
@@ -427,11 +430,15 @@ void ReadSensors(int deltaTime){
   ReadGyro(deltaTime);
   ReadIR(irFrontPin, irFront, irFrontBuffer, irFrontidx);
   ReadIR(irBackPin, irBack, irBackBuffer, irBackidx);
+  #ifdef IR_DEBUG
+    Serial.println(" ");
+  #endif
   PingSonar();
 }
 
-void ReadIR(int irPin, float &value, float irBuffer[], byte idx){
+void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
   //NOTE: All "values" in buffer are divided by buffer length
+  /*
   float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
 
   //n.b first 5 
@@ -449,12 +456,16 @@ void ReadIR(int irPin, float &value, float irBuffer[], byte idx){
     idx = 0;
   }
   
-  
+  */
+
+  value = 448.35f * pow(analogRead(irPin), -0.593f);  
   #ifdef IR_DEBUG
     Serial.print(irPin);
     Serial.print(": ");
-    Serial.println(value);
+    Serial.print(value);
+    Serial.print(" ");
   #endif
+  
 }
 
 void ReadGyro(int deltaTime) {
