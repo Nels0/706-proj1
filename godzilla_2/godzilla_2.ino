@@ -186,7 +186,7 @@ RUNNING_STATE Initialising() {
 
 
 RUNNING_STATE Running() {
-  
+ 
   static unsigned long lastMillis;  
   unsigned int deltaTime = millis() - lastMillis;
 
@@ -370,7 +370,7 @@ void IrSetup(byte irPin, float irBuffer[]){
   pinMode(irPin,INPUT); 
 
   //Filter part
-  for (int i = 0; i < BUFFERLENGTH; i++) {
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) {
     irBuffer[i] = 0;
   }
 }
@@ -420,7 +420,7 @@ double KalmanFilter(double raw_reading, double prev_est)
     Serial.print(" Post Estimate: ");
     Serial.println(post_est);
   #endif
-  
+
   
   return post_est;
   
@@ -501,8 +501,9 @@ void ReadGyro(int deltaTime) {
 }
 
 void PingSonar(){
+  //Gets HC-SR04 to seng sonar ping at 40Hz
   
-  if (millis()-lastPing > 60){
+  if (millis()-lastPing > 25){ //runs at 40hz (25ms)
     lastPing = millis();
     // Trigger HIGH pulse of 10us
     digitalWrite(sonarTrigPin, LOW);
@@ -510,13 +511,6 @@ void PingSonar(){
     digitalWrite(sonarTrigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(sonarTrigPin, LOW);
- 
-
-    
-    #ifdef SONAR_DEBUG
-      Serial.print("Sonar Distance: ");
-      Serial.println(sonarDistance);
-    #endif
   }
 }
 
@@ -524,24 +518,27 @@ void PingSonar(){
 
 
 void echoRead(){
+//Reads how long the echo pulse is
 
   if(digitalRead(sonarEchoPin) == HIGH){
-    
-    sonarRiseMicros = micros();  
-
+    //measure the start of the pulse
+    sonarRiseMicros = micros();
   } else {
-    
+    //measure the end of the pulse 
     long signalDuration = micros() - sonarRiseMicros;
 
-    
+    //Calculate distance
     if(signalDuration > 0 ){
       sonarDistance = (signalDuration/2.0)*0.0343 + 7.5;
-      //sonarDistance = 200;
-    }
-    
       // Convert to distance by multiplying by speed of sound, 
       // accounting for returned wave by division of 2
       // offset by 7.5cm to account for sensor positioning on robot
+    } 
+     
+    #ifdef SONAR_DEBUG
+      Serial.print("Sonar Distance: ");
+      Serial.println(sonarDistance);
+    #endif  
   }
 }
 
