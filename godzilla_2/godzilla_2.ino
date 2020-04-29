@@ -115,7 +115,8 @@ float kP_Wz = 0.5f;
 float kI_Wz = 0.0f;
 float kP_Vy = 1.0f;
 float kI_Vy = 0.0f;
-
+float kP_Vx = 1.0f;
+float kI_Vx = 0.0f;
 
 float kP_Wz2 = 0.1f;
 
@@ -124,8 +125,8 @@ float omegaToPulse = 21.3;
 float L1 = 7.5; //distance from centre to front axe
 float L2 = 8.5; //distance from centre to left/right wheen centres
 float Rw = 2.25; //wheel radius in cm
-int maxSpeedValue = 250;
-int minSpeedValue = 90; 
+int maxPulseValue = 250;
+int minPulseValue = 90; 
 
 int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
@@ -312,7 +313,7 @@ float GetWz(int deltaTime) {
   static float I_Wz;
   float error = irFront - irBack;
   
-  I_Wz += error *  deltaTime/1000;
+  I_Wz += error * deltaTime/1000;
   return (kP_Wz * error) + (kI_Wz * I_Wz);
 }
 
@@ -320,8 +321,16 @@ float GetVy(int deltaTime) {
   static float I_Vy;
   float error = 15 - ((irFront + irBack)/2);
 
-  I_Vy += error *  deltaTime/1000;
+  I_Vy += error * deltaTime/1000;
   return (kP_Vy * error) + (kI_Vy * I_Vy);
+}
+
+float GetVx(int deltaTime) {
+  static float I_Vx;
+  float error = sonarDistance - 15;
+
+  I_Vx += error * deltaTime/1000;
+  return (kP_Vx * error) + (kI_Vx * I_Vx);
 }
 
 void EnableMotors(){
