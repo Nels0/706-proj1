@@ -3,6 +3,7 @@
 //#define NO_BATTERY_V_OK
 //#define GYRO_DEBUG
 //#define IR_DEBUG 
+//#define IR_GRAPH
 //#define MOTOR_DEBUG
 //#define SONAR_DEBUG
 //#define ROTATION_CONTROL_DEBUG
@@ -107,12 +108,15 @@ double sensor_noise = 1;
 float prev_Gyro = 0;
 
 // GAINS
-float kP_Wz = 0.5f;
-float kI_Wz = 0.0f;
+float kP_Wz = 0.7f;
+float kI_Wz = 0.001f;
+float Wz_windup = 20;
 float kP_Vy = 1.0f;
-float kI_Vy = 0.0f;
-float kP_Vx = 4.0f;
-float kI_Vx = 0.0f;
+float kI_Vy = 0.001f;
+float Vy_windup = 10;
+float kP_Vx = 5.0f;
+float kI_Vx = 0.001f;
+float Vx_windup = 10;
 
 float kP_Wz2 = 0.1f;
 
@@ -299,8 +303,11 @@ ACTION_STATE Still () {
 float GetWz(int deltaTime) {
   static float I_Wz;
   float error = irFront - irBack;
+
+  if(abs(I_Wz) < Wz_windup){
+    I_Wz += error * deltaTime/1000;
+  }
   
-  I_Wz += error * deltaTime/1000;
   return (kP_Wz * error) + (kI_Wz * I_Wz);
 }
 
@@ -308,7 +315,9 @@ float GetVy(int deltaTime) {
   static float I_Vy;
   float error = 15 - ((irFront + irBack)/2);
 
-  I_Vy += error * deltaTime/1000;
+  if(abs(I_Vy) < Vy_windup){
+    I_Vy += error * deltaTime/1000;
+  }
   return (kP_Vy * error) + (kI_Vy * I_Vy);
 }
 
@@ -316,7 +325,9 @@ float GetVx(int deltaTime) {
   static float I_Vx;
   float error = sonarDistance - 15;
 
-  I_Vx += error * deltaTime/1000;
+  if(abs(I_Vx) < Vx_windup){
+    I_Vx += error * deltaTime/1000;
+  }
   return (kP_Vx * error) + (kI_Vx * I_Vx);
 }
 
@@ -428,7 +439,9 @@ double KalmanFilter(double raw_reading, double prev_est)
 //========== SENSOR READINGs===========
 void ReadSensors(int deltaTime){
   ReadGyro(deltaTime);
-  ReadIR(irFrontPin, irFront, irFrontBuffer, irFrontidx);
+  #ifndef IR_GRAPH
+    ReadIR(irFrontPin, irFront, irFrontBuffer, irFrontidx);
+  #endif
   ReadIR(irBackPin, irBack, irBackBuffer, irBackidx);
   #ifdef IR_DEBUG //formatting
     Serial.println(" ");
@@ -463,6 +476,18 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
     Serial.print(": ");
     Serial.print(value);
     Serial.print(" ");
+  #endif
+
+  #ifdef IR_GRAPH
+    float unfiltered = 448.35f * pow(analogRead(irPin), -0.593f) ;
+    Serial.print("Unfiltered");
+    Serial.print(": ");
+    Serial.print(unfiltered);
+    Serial.print(" ");
+    Serial.print("Filtered");
+    Serial.print(": ");
+    Serial.print(value);
+    Serial.println(" ");
   #endif
   
 }
