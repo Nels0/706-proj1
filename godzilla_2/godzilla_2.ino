@@ -280,12 +280,11 @@ ACTION_STATE Rotate(int deltaTime) {
   else if (error < -180)
     error = error + 360;
 
-  // TODO - add integral
   float Wz = (kP_Wz2 * error);
 
   MotorWrite(0, 0, Wz);
 
-  if (abs(error) < 0.5 && Wz < 5) { // TODO - tune these values
+  if (abs(error) < 0.5 && Wz < 5) {
     turnCount++;
     return MOVING_FORWARD;
   } else {
