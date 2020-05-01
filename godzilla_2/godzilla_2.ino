@@ -1,5 +1,6 @@
 // ========================================================================
 // Defines and includes
+// Uncomment defines to see serial output
 //#define NO_BATTERY_V_OK
 //#define GYRO_DEBUG
 //#define IR_DEBUG 
@@ -11,6 +12,7 @@
 //#define KALMAN_DEBUG
 #include <Servo.h>
 
+// System coordinates and orientation
 /* |      ____=____
  * |  [1]-|       |-[2]       ^ X
  * |      o   ^   |       Y   |
@@ -20,14 +22,7 @@
  * 
  */
 
-// ========= TODO =========
-/* integral windup
- * speed eval?
- */
-
-// ======================Enums===================================================
- 
-
+// ======================== Enums =========================
 enum RUNNING_STATE {
   INITIALISING,
   RUNNING,
@@ -48,8 +43,7 @@ enum DEBUG {
   VERBOSE
 };
 
-
-// ====================Pin assignments================================================
+// =================== Pin assignments ====================
 //Sensors
 const byte gyroPin = A2;
 //IR
@@ -68,47 +62,42 @@ Servo motor2;
 Servo motor3;
 Servo motor4;
 
-
-// ======================Variables===================================================
-// 
-
-// STATE
+// ====================== Variables ======================= 
+// states
 int turnCount = 0;
 float desiredAngle = 90;
+ACTION_STATE actionState = MOVING_FORWARD;
+RUNNING_STATE machineState = INITIALISING;
 
-// SENSORS;
-
-//  SONAR
+// Sonar
 long sonarRiseMicros;
 float sonarDistance = 999;
 int lastPing = 0;
 
-
-//  IR
+// IR
 #define BUFFERLENGTH 20
-
 int irFrontidx = 0;
 float irFront = 0;
 float irFrontBuffer[BUFFERLENGTH];
-
 int irBackidx = 0;
 float irBack = 0;
 float irBackBuffer[BUFFERLENGTH];
 
-//  GYRO 
+// Gyrosope 
 float gyroSupplyVoltage = 5;
 float gyroZeroVoltage = 0;
 float gyroSensitivity = 0.0070;
 float rotationThreshold = 1;
 float currentAngle = 0;
 
-//Kalman Filter
+// Kalman filter
 double process_noise = 1;
 double sensor_noise = 1;
 float prev_Gyro = 0;
 
-// GAINS
+// Controller gains
 float kP_Wz = 0.7f;
+float kP_Wz2 = 0.1f;
 float kI_Wz = 0.001f;
 float Wz_windup = 20;
 float kP_Vy = 1.0f;
@@ -117,8 +106,6 @@ float Vy_windup = 10;
 float kP_Vx = 5.0f;
 float kI_Vx = 0.001f;
 float Vx_windup = 10;
-
-float kP_Wz2 = 0.1f;
 
 // Motors
 float omegaToPulse = 21.3;
@@ -133,10 +120,6 @@ int loopTime = 10; // Time for each loop in ms
 DEBUG debug_level = NONE;
 HardwareSerial *SerialCom;
 
-ACTION_STATE actionState = MOVING_FORWARD;
-RUNNING_STATE machineState = INITIALISING;
-
-
 void setup() {
   SerialCom = &Serial;
   SerialCom->begin(115200);
@@ -150,6 +133,7 @@ void setup() {
 
 }
 
+// ================== Arduino functions ===================
 void loop() {
   
   #ifdef STATE_DEBUG
@@ -172,10 +156,7 @@ void loop() {
   }
 }
 
-// ==================State machine functions=====================================
-
-
-// ========== MACHINE STATES=======
+// ==================== Machine states =====================
 RUNNING_STATE Initialising() {
   SerialCom->println("INITIALISING...");
   EnableMotors();
@@ -187,10 +168,7 @@ RUNNING_STATE Initialising() {
   return RUNNING;
 }
 
-
-
 RUNNING_STATE Running() {
- 
   static unsigned long lastMillis;  
   unsigned int deltaTime = millis() - lastMillis;
 
@@ -203,11 +181,9 @@ RUNNING_STATE Running() {
       case MOVING_FORWARD:
         actionState = MoveForward(deltaTime);
       break;
-      
       case MOVING_TURNING:
         actionState = Rotate(deltaTime);
         break;
-      
       case STILL:
         actionState = Still();
         break;
@@ -248,16 +224,12 @@ RUNNING_STATE Stopped() {
   return STOPPED;
 }
 
-
-// ============= ACTION STATES ===========
+// ==================== Action states =====================
 ACTION_STATE MoveForward(int deltaTime){
-
   float Wz = GetWz(deltaTime);
   float Vy = GetVy(deltaTime);
   float Vx = GetVx(deltaTime);//10.0f; 
-  
   MotorWrite(Vx, Vy, Wz);
-
 
   if(sonarDistance < 15){
     if(turnCount >= 3){
@@ -281,7 +253,6 @@ ACTION_STATE Rotate(int deltaTime) {
     error = error + 360;
 
   float Wz = (kP_Wz2 * error);
-
   MotorWrite(0, 0, Wz);
 
   if (abs(error) < 0.5 && Wz < 5) {
@@ -293,37 +264,40 @@ ACTION_STATE Rotate(int deltaTime) {
 }
 
 ACTION_STATE Still () {
-  
   MotorWrite(0, 0, 0);
-  
   return STILL;
 }
 
+// Wz controller
 float GetWz(int deltaTime) {
   static float I_Wz;
   float error = irFront - irBack;
 
+  // Integral component
   if(abs(I_Wz) < Wz_windup){
     I_Wz += error * deltaTime/1000;
   }
-  
   return (kP_Wz * error) + (kI_Wz * I_Wz);
 }
 
+// Vy controller
 float GetVy(int deltaTime) {
   static float I_Vy;
   float error = 15 - ((irFront + irBack)/2);
 
+  // Integral component
   if(abs(I_Vy) < Vy_windup){
     I_Vy += error * deltaTime/1000;
   }
   return (kP_Vy * error) + (kI_Vy * I_Vy);
 }
 
+// Vx controller
 float GetVx(int deltaTime) {
   static float I_Vx;
   float error = sonarDistance - 15;
 
+  // Integral component
   if(abs(I_Vx) < Vx_windup){
     I_Vx += error * deltaTime/1000;
   }
@@ -342,6 +316,7 @@ void MotorWrite(float Vx, float Vy, float Wz){
   float _Vy = Sat2(Vy, 20, 0);
   float _Wz = Sat2(Wz, 20, 0);
 
+  // Kinematic equations to convert velocites to motor pulses
   int motor1Pulse = omegaToPulse * KinematicCalc(_Vx,  _Vy, -_Wz);
   int motor2Pulse = omegaToPulse * KinematicCalc(_Vx, -_Vy,  _Wz);
   int motor3Pulse = omegaToPulse * KinematicCalc(_Vx, -_Vy, -_Wz);
@@ -354,7 +329,7 @@ void MotorWrite(float Vx, float Vy, float Wz){
 }
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
-    return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
+  return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
 }
 
 int Sat2(int value, int maxValue, int minValue) {
@@ -375,11 +350,10 @@ int Sat2(int value, int maxValue, int minValue) {
     return value; 
 }
 
-//========== SENSOR SETUP =============
+// ===================== Sensor setup =====================
 void IrSetup(byte irPin, float irBuffer[]){
   pinMode(irPin,INPUT); 
-
-  //Filter part
+  // Filter part
   for (int i = 0; i < BUFFERLENGTH - 1; i++) {
     irBuffer[i] = 0;
   }
@@ -388,11 +362,9 @@ void IrSetup(byte irPin, float irBuffer[]){
 void SonarSetup(){
   pinMode(sonarTrigPin, OUTPUT);
   pinMode(sonarEchoPin, INPUT);
-
-  //Attach interrupt to echo pin
+  // Attach interrupt to echo pin
   attachInterrupt(digitalPinToInterrupt(sonarEchoPin), echoRead, CHANGE);
   PingSonar();
-  
 }
 
 void GyroSetup() {
@@ -401,7 +373,7 @@ void GyroSetup() {
   float sum = 0;    
   pinMode(gyroPin,INPUT);
   Serial.println("Getting the gyro zero voltage...");
-  //  read 100 values of voltage when gyro is at still, to calculate the zero-drift
+  // Read 100 values of voltage when gyro is at still, to calculate the zero-drift
   for (i=0; i<100; i++) {  
     gyroValue = analogRead(gyroPin);  
     sum += gyroValue;  
@@ -411,7 +383,7 @@ void GyroSetup() {
   Serial.println("Gyro Calibrated!");
 }
 
-//====== KALMAN FILTER FUNCTION ===========
+// ==================== Kalman filter =====================
 double KalmanFilter(double raw_reading, double prev_est)
 {
   double pri_est, pri_var, post_est, post_var, gain;
@@ -431,11 +403,10 @@ double KalmanFilter(double raw_reading, double prev_est)
     Serial.println(post_est);
   #endif
 
-  
   return post_est;
-  
 }
-//========== SENSOR READINGs===========
+
+// =================== Sensor readings ====================
 void ReadSensors(int deltaTime){
   ReadGyro(deltaTime);
   #ifndef IR_GRAPH
@@ -448,27 +419,26 @@ void ReadSensors(int deltaTime){
   PingSonar();
 }
 
+// Infrared readings
 void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
-  //NOTE: All "values" in buffer are divided by buffer length  
+  // NOTE: All "values" in buffer are divided by buffer length  
   float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
 
-  //n.b first 5 values will be off due to zero-initialisation
+  // n.b first 5 values will be off due to zero-initialisation
   
-  //subtract last number from average
+  // Subtract last number from average
   value -= irBuffer[idx];  
-  //add new number to average
+  // Add new number to average
   value += newValue;
-  //overwrite new number in buffer
+  // Overwrite new number in buffer
   irBuffer[idx] = newValue;
-  //increment buffer index
+  // Increment buffer index
   if (idx < BUFFERLENGTH - 1){
     idx++;
   } else {
     idx = 0;
   }
   
-  
-
   // value = 448.35f * pow(analogRead(irPin), -0.593f);  
   #ifdef IR_DEBUG
     Serial.print(irPin);
@@ -488,13 +458,10 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
     Serial.print(value);
     Serial.println(" ");
   #endif
-  
 }
 
+// Gyroscope readings
 void ReadGyro(int deltaTime) {
-
-
-  
   //OoO to preserve precision
   float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
   angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
@@ -513,8 +480,6 @@ void ReadGyro(int deltaTime) {
     currentAngle += 360;
   else if (currentAngle > 359)
     currentAngle -= 360;
-
-  
 
   #ifdef GYRO_DEBUG
     Serial.print(" Angular Velocity: ");
@@ -538,9 +503,7 @@ void PingSonar(){
   }
 }
 
-
-
-
+// Sonar readings (attached to interrupt)
 void echoRead(){
 //Reads how long the echo pulse is
 
@@ -566,9 +529,7 @@ void echoRead(){
   }
 }
 
-
-// ============= BATTERY =========
-
+// ======================= Battery ========================
 boolean is_battery_voltage_OK()
 {
   static byte Low_voltage_counter;
