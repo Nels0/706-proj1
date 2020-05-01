@@ -10,6 +10,7 @@
 //#define ROTATION_CONTROL_DEBUG
 //#define STATE_DEBUG
 //#define KALMAN_DEBUG
+#define BUFFERLENGTH 20
 #include <Servo.h>
 
 // System coordinates and orientation
@@ -28,7 +29,6 @@ enum RUNNING_STATE {
   RUNNING,
   STOPPED
 };
-
 
 enum ACTION_STATE {
   MOVING_FORWARD,
@@ -73,9 +73,10 @@ RUNNING_STATE machineState = INITIALISING;
 long sonarRiseMicros;
 float sonarDistance = 999;
 int lastPing = 0;
+int sonaridx = 0;
+float sonarBuffer[BUFFERLENGTH];
 
 // IR
-#define BUFFERLENGTH 20
 int irFrontidx = 0;
 float irFront = 0;
 float irFrontBuffer[BUFFERLENGTH];
@@ -364,6 +365,10 @@ void SonarSetup(){
   pinMode(sonarEchoPin, INPUT);
   // Attach interrupt to echo pin
   attachInterrupt(digitalPinToInterrupt(sonarEchoPin), echoRead, CHANGE);
+  // Filter part
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) {
+    sonarBuffer[i] = 999;
+  }
   PingSonar();
 }
 
@@ -516,10 +521,24 @@ void echoRead(){
 
     //Calculate distance
     if(signalDuration > 0 ){
-      sonarDistance = (signalDuration/2.0)*0.0343 + 7.5;
+      float newValue = ((signalDuration/2.0)*0.0343 + 7.5) / BUFFERLENGTH;
       // Convert to distance by multiplying by speed of sound, 
       // accounting for returned wave by division of 2
       // offset by 7.5cm to account for sensor positioning on robot
+
+      // Filter:
+      // Subtract last number from average
+      sonarDistance -= sonarBuffer[sonaridx];  
+      // Add new number to average
+      sonarDistance += newValue;
+      // Overwrite new number in buffer
+      sonarBuffer[sonaridx] = newValue;
+      // Increment buffer index
+      if (sonaridx < BUFFERLENGTH - 1){
+        sonaridx++;
+      } else {
+        sonaridx = 0;
+      }
     } 
      
     #ifdef SONAR_DEBUG
