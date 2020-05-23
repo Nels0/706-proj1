@@ -15,8 +15,29 @@
 // TODO - implement error for GetServoAngle function
 // TODO - change fanServoPin
 // TODO - change the value for minServoPulseValue
-
+// TODO - come up with a better name for the NO_ACTION states
 // ======================== Enums =========================
+enum FINISHED_SM {
+  NO_ACTION_1,
+  FINISHED  
+};
+
+enum DRIVING_SM {
+  NO_ACTION_2,
+  DRIVING
+};
+
+enum EXTINGUISHING_SM {
+  NO_ACTION_3,
+  ALIGNING,
+  EXTINGUISHING
+};
+
+enum SCANNING_SM {
+  NO_ACTION_4,
+  SCANNING,
+  REPOSITION
+};
 
 // =================== Pin assignments ====================
 //Motors
@@ -48,14 +69,74 @@ int minPulseValue = 90;
 int minServoPulseValue = 0;
 int maxServoPulseValue = 600;
 
+// State machines
+FINISHED_SM finishedState = NO_ACTION_1;
+DRIVING_SM drivingState = NO_ACTION_2;
+EXTINGUISHING_SM extinguishingState = NO_ACTION_3;
+SCANNING_SM scanningState = NO_ACTION_4;
+
 // ================== Arduino functions ===================
 void setup() {
 }
 
 void loop() {
+  // Running the state machines
+  FinishedRun();
+  DrivingRun();
+  ExtinguishRun();
+  ScanningRun();
 }
 
 // =================== State machines =========================
+void FinishedRun() {
+  switch (finishedState) {
+    case NO_ACTION_1:
+      // TODO
+      break;
+    case FINISHED:
+      // TODO
+      break;
+  }
+}
+
+void DrivingRun() {
+  switch (drivingState) {
+    case NO_ACTION_2:
+      // TODO
+      break;
+    case DRIVING:
+      // TODO
+      break;
+  }
+}
+
+void ExtinguishRun() {
+    switch (extinguishingState) {
+    case NO_ACTION_3:
+      // TODO
+      break;
+    case ALIGNING:
+      // TODO
+      break;
+    case EXTINGUISHING:
+      // TODO
+      break;
+  }
+}
+
+void ScanningRun() {
+  switch (scanningState) {
+    case NO_ACTION_4:
+      // TODO
+      break;
+    case ALIGNING:
+      // TODO
+      break;
+    case REPOSITION:
+      // TODO
+      break;
+  }
+}
 
 // =================== Controllers ============================
 // Servo angle controller
