@@ -15,26 +15,31 @@
 // TODO - implement error for GetServoAngle function
 // TODO - change fanServoPin
 // TODO - change the value for minServoPulseValue
-// TODO - come up with a better name for the NO_ACTION states
+// TODO - reset state transition conditions every loop - e.g. startFireFighting = false and fireFound = false at the start of each loop... 
+//        or maybe this wont work because the command to startFireFighting might be set to true after the firefighting state is called? idk.
+//        Might need to reset it once the state transition happens. Or maybe we want to keep them on until the state is finished? Like 
+//        having the fireFound to be true until the fire is put out
+// TODO - Add DriveToFire algorithm
+
 // ======================== Enums =========================
 enum FINISHED_SM {
-  NO_ACTION_1,
+  NO_ACTION_FINISHED,
   FINISHED  
 };
 
 enum DRIVING_SM {
-  NO_ACTION_2,
+  NO_ACTION_DRIVING,
   DRIVING
 };
 
 enum EXTINGUISHING_SM {
-  NO_ACTION_3,
+  NO_ACTION_EXTINGUISHING,
   ALIGNING,
   EXTINGUISHING
 };
 
 enum SCANNING_SM {
-  NO_ACTION_4,
+  NO_ACTION_SCANNING,
   SCANNING,
   REPOSITION
 };
@@ -70,13 +75,14 @@ int minServoPulseValue = 0;
 int maxServoPulseValue = 600;
 
 // State machines
-FINISHED_SM finishedState = NO_ACTION_1;
-DRIVING_SM drivingState = NO_ACTION_2;
-EXTINGUISHING_SM extinguishingState = NO_ACTION_3;
-SCANNING_SM scanningState = NO_ACTION_4;
+FINISHED_SM finishedState = NO_ACTION_FINISHED;
+DRIVING_SM drivingState = NO_ACTION_DRIVING;
+EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
+SCANNING_SM scanningState = NO_ACTION_SCANNING;
 
 // Track related
 int firesPutOut = 0;
+bool fireFound = false;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -93,7 +99,7 @@ void loop() {
 // =================== State machines =========================
 void FinishedRun() {
   switch (finishedState) {
-    case NO_ACTION_1:
+    case NO_ACTION_FINISHED:
       if (firesPutOut == 2)
         finishedState = FINISHED;
       break;
@@ -105,18 +111,20 @@ void FinishedRun() {
 
 void DrivingRun() {
   switch (drivingState) {
-    case NO_ACTION_2:
-      // TODO
+    case NO_ACTION_DRIVING:
+      if (fireFound) {
+        drivingState = DRIVING;
+      }
       break;
     case DRIVING:
-      // TODO
+      drivingState = DriveToFire();
       break;
   }
 }
 
 void ExtinguishRun() {
     switch (extinguishingState) {
-    case NO_ACTION_3:
+    case NO_ACTION_EXTINGUISHING:
       // TODO
       break;
     case ALIGNING:
@@ -130,7 +138,7 @@ void ExtinguishRun() {
 
 void ScanningRun() {
   switch (scanningState) {
-    case NO_ACTION_4:
+    case NO_ACTION_SCANNING:
       // TODO
       break;
     case ALIGNING:
@@ -140,6 +148,12 @@ void ScanningRun() {
       // TODO
       break;
   }
+}
+
+// =================== State functions ========================
+DRIVING_SM DriveToFire() {
+  // Implement driving algorithm plz
+  return DRIVING;
 }
 
 // =================== Controllers ============================
