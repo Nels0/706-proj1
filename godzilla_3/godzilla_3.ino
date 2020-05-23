@@ -57,13 +57,13 @@ Servo fanServo;
 // Controller gains
 float kP_servoAngle = 0.001f;
 float kI_servoAngle = 0.0f;
-float servoAngle_windup = 10;
+float servoAngle_windup = 10.0f;
 
 // Motors
-float omegaToPulse = 21.3;
-float L1 = 7.5; //distance from centre to front axe
-float L2 = 8.5; //distance from centre to left/right wheen centres
-float Rw = 2.25; //wheel radius in cm
+float omegaToPulse = 21.3f;
+float L1 = 7.5f; //distance from centre to front axe
+float L2 = 8.5f; //distance from centre to left/right wheen centres
+float Rw = 2.25f; //wheel radius in cm
 int maxPulseValue = 250;
 int minPulseValue = 90; 
 int minServoPulseValue = 0;
@@ -74,6 +74,9 @@ FINISHED_SM finishedState = NO_ACTION_1;
 DRIVING_SM drivingState = NO_ACTION_2;
 EXTINGUISHING_SM extinguishingState = NO_ACTION_3;
 SCANNING_SM scanningState = NO_ACTION_4;
+
+// Track related
+int firesPutOut = 0;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -91,10 +94,11 @@ void loop() {
 void FinishedRun() {
   switch (finishedState) {
     case NO_ACTION_1:
-      // TODO
+      if (firesPutOut == 2)
+        finishedState = FINISHED;
       break;
     case FINISHED:
-      // TODO
+      MotorWrite(0, 0, 0);
       break;
   }
 }
