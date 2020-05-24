@@ -14,7 +14,8 @@
 
 // TODO - implement error for GetServoAngle function
 // TODO - change fanServoPin
-// TODO - change the value for minServoPulseValue
+// TODO - change fanPin
+// TODO - Implement deltaTime
 // TODO - reset state transition conditions every loop - e.g. startFireFighting = false and fireFound = false at the start of each loop... 
 //        or maybe this wont work because the command to startFireFighting might be set to true after the firefighting state is called? idk.
 //        Might need to reset it once the state transition happens. Or maybe we want to keep them on until the state is finished? Like 
@@ -57,6 +58,10 @@ Servo motor3;
 Servo motor4;
 Servo fanServo;
 
+//Fan
+const byte fanPin = 53; // Really unsure
+
+
 // ====================== Variables ======================= 
 
 // Controller gains
@@ -71,7 +76,7 @@ float L2 = 8.5f; //distance from centre to left/right wheen centres
 float Rw = 2.25f; //wheel radius in cm
 int maxPulseValue = 250;
 int minPulseValue = 90; 
-int minServoPulseValue = 0;
+int minServoPulseValue = 10;
 int maxServoPulseValue = 600;
 
 // State machines
@@ -83,6 +88,13 @@ SCANNING_SM scanningState = NO_ACTION_SCANNING;
 // Track related
 int firesPutOut = 0;
 bool fireFound = false;
+
+// Phototransistors
+float photoAverage;
+
+// Fan
+int toggle = 0; 
+unsigned int startTime;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -123,20 +135,38 @@ void DrivingRun() {
 }
 
 void ExtinguishRun() {
+    unsigned int deltaTime = 1;
+    // TODO
+
     switch (extinguishingState) {
     case NO_ACTION_EXTINGUISHING:
-      // TODO
+      if (photoAverage >= 1000) {
+        // Arbitruary value of 1000
+        // change later
+        extinguishingState = ALIGNING; 
+      }
       break;
     case ALIGNING:
-      // TODO
+      ServoWrite(GetServoPulse(deltaTime)); 
+      if (GetServoPulse(deltaTime) <= 0.5) {
+        // Arbitruary value of 0.5
+        // change later
+        extinguishingState = EXTINGUISHING; 
+      } else {
+        extinguishingState = ALIGNING; 
+      }
       break;
     case EXTINGUISHING:
-      // TODO
+      extinguishingState = runFan(); 
       break;
   }
 }
 
 void ScanningRun() {
+  unsigned int deltaTime = 1;
+  // TODO
+
+
   switch (scanningState) {
     case NO_ACTION_SCANNING:
       // TODO
@@ -161,6 +191,13 @@ DRIVING_SM DriveToFire() {
 float GetServoPulse(int deltaTime) {
   static float I_servoAngle;
   float error = 0;
+
+  // TODO
+  // Need to decide on phototransistor arrangement on servo motor 
+  // and how the error would be decided
+  // Idea: Error is most likely minimised when the front facing phototransistors have similar values
+  // Eg.: error = phototransistor1 - phototransistor4
+
   if(abs(I_servoAngle) < servoAngle_windup){
     I_servoAngle += error * deltaTime/1000;
   }
@@ -195,6 +232,28 @@ void MotorWrite(float Vx, float Vy, float Wz) {
 
 void ServoWrite(int servoPulse) {
   fanServo.writeMicroseconds(1500 + Sat2(servoPulse, maxServoPulseValue, minServoPulseValue));
+}
+
+EXTINGUISHING_SM runFan() {
+  // Unsure whether this is how you turn on the fan
+  digitalWrite(fanPin, HIGH); 
+  extinguishingState = EXTINGUISHING; 
+
+  // Reference time is when extinguishing state first starts
+  if (toggle == 0) {
+    toggle = 1; 
+    startTime = millis(); 
+  }
+
+  // Stops fan once it has been turned on for 10s
+  if (millis() - startTime >= 10000) {
+    digitalWrite(fanPin, LOW);
+    toggle = 0; 
+    firesPutOut++; 
+    extinguishingState = NO_ACTION_EXTINGUISHING; 
+  }
+
+  return extinguishingState; 
 }
 
 // ====================== Helper functions ===========================
