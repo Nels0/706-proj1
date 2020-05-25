@@ -85,9 +85,15 @@ DRIVING_SM drivingState = NO_ACTION_DRIVING;
 EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
 SCANNING_SM scanningState = NO_ACTION_SCANNING;
 
+// IR Sensors
+float irFront = 0;
+float irBack = 0; 
+
+
 // Track related
 int firesPutOut = 0;
 bool fireFound = false;
+bool startSearching = true; 
 
 // Phototransistors
 float photoAverage;
@@ -95,6 +101,12 @@ float photoAverage;
 // Fan
 int toggle = 0; 
 unsigned int startTime;
+
+// Gyro
+int currentAngle = 0;
+
+// Rotation
+float kP_Wz2 = 0.02;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -143,6 +155,7 @@ void ExtinguishRun() {
       if (photoAverage >= 1000) {
         // Arbitruary value of 1000
         // change later
+        startSearching = false; 
         extinguishingState = ALIGNING; 
       }
       break;
@@ -157,26 +170,79 @@ void ExtinguishRun() {
       }
       break;
     case EXTINGUISHING:
-      extinguishingState = runFan(); 
+      extinguishingState = RunFan(); 
       break;
   }
+}
+
+EXTINGUISHING_SM RunFan() {
+  // Unsure whether this is how you turn on the fan
+  digitalWrite(fanPin, HIGH); 
+  extinguishingState = EXTINGUISHING; 
+
+  // Reference time is when extinguishing state first starts
+  if (toggle == 0) {
+    toggle = 1; 
+    startTime = millis(); 
+  }
+
+  // Stops fan once it has been turned on for 10s
+  if (millis() - startTime >= 10000) {
+    digitalWrite(fanPin, LOW);
+    startSearching = true; 
+    toggle = 0; 
+    firesPutOut++; 
+    extinguishingState = NO_ACTION_EXTINGUISHING; 
+  }
+
+  return extinguishingState; 
 }
 
 void ScanningRun() {
   unsigned int deltaTime = 1;
   // TODO
 
-
   switch (scanningState) {
     case NO_ACTION_SCANNING:
-      // TODO
+      if (startSearching) {
+        scanningState = SCANNING; 
+      }
       break;
-    case ALIGNING:
-      // TODO
+    case SCANNING:
+      scanningState = Scanning(deltaTime); 
       break;
     case REPOSITION:
-      // TODO
+      startSearching = false; 
+      MotorWrite(0, 150, 0);
+      if (irFront <= 20) {
+        startSearching = true; 
+        scanningState = SCANNING; 
+      } 
+      if (fireFound) {
+        scanningState = NO_ACTION_SCANNING; 
+      }
       break;
+  }
+}
+
+SCANNING_SM Scanning(int deltaTime) {
+  float desiredAngle = 420; 
+  float error = desiredAngle - currentAngle;
+
+  float Wz = (kP_Wz2 * error);
+  MotorWrite(0, 0, Wz);
+
+  // Need to read phototransistors
+  // Arbuitary value
+  if (photoAverage >= 1000) {
+    fireFound = true;
+    return NO_ACTION_SCANNING; 
+  }
+
+  if (abs(error) < 0.5 && Wz < 5) {
+    return REPOSITION;
+  } else {
+    return SCANNING;
   }
 }
 
@@ -202,6 +268,12 @@ float GetServoPulse(int deltaTime) {
     I_servoAngle += error * deltaTime/1000;
   }
   return (kP_servoAngle * error) + (kI_servoAngle * I_servoAngle);
+}
+
+// ================== Sensor functions =======================
+
+void ReadGyro(int deltaTime) {
+  currentAngle = 0;
 }
 
 // ================== Actuation functions =======================
@@ -232,28 +304,6 @@ void MotorWrite(float Vx, float Vy, float Wz) {
 
 void ServoWrite(int servoPulse) {
   fanServo.writeMicroseconds(1500 + Sat2(servoPulse, maxServoPulseValue, minServoPulseValue));
-}
-
-EXTINGUISHING_SM runFan() {
-  // Unsure whether this is how you turn on the fan
-  digitalWrite(fanPin, HIGH); 
-  extinguishingState = EXTINGUISHING; 
-
-  // Reference time is when extinguishing state first starts
-  if (toggle == 0) {
-    toggle = 1; 
-    startTime = millis(); 
-  }
-
-  // Stops fan once it has been turned on for 10s
-  if (millis() - startTime >= 10000) {
-    digitalWrite(fanPin, LOW);
-    toggle = 0; 
-    firesPutOut++; 
-    extinguishingState = NO_ACTION_EXTINGUISHING; 
-  }
-
-  return extinguishingState; 
 }
 
 // ====================== Helper functions ===========================
