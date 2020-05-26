@@ -19,6 +19,12 @@
 // TODO - Add fire detection to the repositioning state in the scanning sm
 
 // ======================== Enums =========================
+enum RUNNING_SM {
+  INITIALISING,
+  RUNNING,
+  STOPPED
+};
+
 enum FINISHED_SM {
   NO_ACTION_FINISHED,
   FINISHED  
@@ -61,6 +67,7 @@ const byte fanPin = 53; // Really unsure
 // ====================== Variables ======================= 
 
 float loopTime = 10; // Time for each loop in ms
+HardwareSerial *SerialCom;
 
 // Controller gains
 float kP_servoAngle = 0.001f;
@@ -78,6 +85,7 @@ int minServoPulseValue = 10;
 int maxServoPulseValue = 600;
 
 // State machines
+RUNNING_SM runningState = INITIALISING;
 FINISHED_SM finishedState = NO_ACTION_FINISHED;
 DRIVING_SM drivingState = NO_ACTION_DRIVING;
 EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
@@ -112,18 +120,21 @@ float kP_Wz2 = 0.02;
 
 // ================== Arduino functions ===================
 void setup() {
+  SerialCom = &Serial;
+  SerialCom->begin(115200);
 }
 
 void loop() {
-  // Running the state machines every loopTime
-  static unsigned long lastMillis;  
-  unsigned int deltaTime = millis() - lastMillis;
-  if (deltaTime >= loopTime) {
-    lastMillis = millis();
-    FinishedRun();
-    DrivingRun();
-    ExtinguishRun(deltaTime);
-    ScanningRun(deltaTime);
+  switch (runningState) {
+  case INITIALISING:
+    runningState = Initialising();
+    break;
+  case RUNNING:   
+    runningState = Running();
+    break;
+  case STOPPED:
+    runningState =  Stopped();
+    break;
   }
 }
 
@@ -188,6 +199,56 @@ void ScanningRun(float deltaTime) {
 }
 
 // =================== State functions ========================
+RUNNING_SM Initialising() {
+  EnableMotors();
+  // TODO
+  // IrSetup(irFrontPin, irFrontBuffer);  
+  // IrSetup(irBackPin, irBackBuffer);
+  // GyroSetup();
+  // SonarSetup();
+  return RUNNING;
+}
+
+RUNNING_SM Running() {
+  // Running the state machines every loopTime
+  static unsigned long lastMillis;  
+  unsigned int deltaTime = millis() - lastMillis;
+  if (deltaTime >= loopTime) {
+    lastMillis = millis();
+    FinishedRun();
+    DrivingRun();
+    ExtinguishRun(deltaTime);
+    ScanningRun(deltaTime);
+  }
+  if (!is_battery_voltage_OK()) return STOPPED;
+  return RUNNING;  
+}
+
+RUNNING_SM Stopped() {
+  static byte counter_lipo_voltage_ok;
+  static unsigned long previous_millis;
+  int Lipo_level_cal;
+  //make motors not move
+  MotorWrite(0, 0, 0);
+  if (millis() - previous_millis > 500) { // Print message every 500ms
+    previous_millis = millis();
+    SerialCom->println("STOPPED---------");
+    //500ms timed if statement to check lipo and output speed settings
+    if (is_battery_voltage_OK()) {
+      SerialCom->print("Lipo OK waiting of voltage Counter 2 < ");
+      SerialCom->println(counter_lipo_voltage_ok);
+      counter_lipo_voltage_ok++;
+      if (counter_lipo_voltage_ok > 2) { //Making sure lipo voltage is stable
+        counter_lipo_voltage_ok = 0;
+        SerialCom->println("Lipo OK returning to RUN STATE");
+        return INITIALISING;
+      }
+    } else
+      counter_lipo_voltage_ok = 0;
+  }
+  return STOPPED;
+}
+
 DRIVING_SM DriveToFire() {
   // Implement driving algorithm plz
   return DRIVING;
@@ -321,4 +382,46 @@ int Sat2(int value, int maxValue, int minValue) {
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
   return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
+}
+
+// ======================= Battery ========================
+boolean is_battery_voltage_OK()
+{
+  static byte Low_voltage_counter;
+  static unsigned long previous_millis;
+
+  int Lipo_level_cal;
+  int raw_lipo;
+  //the voltage of a LiPo cell depends on its chemistry and varies from about 
+  //3.5V (discharged) = 717(3.5V Min) https://oscarliang.com/lipo-battery-guide/
+  //to about 4.20-4.25V (fully charged) = 860(4.2V Max)
+  //Lipo Cell voltage should never go below 3V, So 3.5V is a safety factor.
+  raw_lipo = analogRead(A0);
+  //Serial.println(raw_lipo * 5 / 1023);
+  Lipo_level_cal = (raw_lipo - 717);
+  Lipo_level_cal = Lipo_level_cal * 100;
+  Lipo_level_cal = Lipo_level_cal / 143;
+
+  if (Lipo_level_cal > 0 && Lipo_level_cal < 160) {
+    previous_millis = millis();
+    Low_voltage_counter = 0;
+    return true;
+  } else {
+    if (Lipo_level_cal < 0)
+      SerialCom->println("Lipo is Disconnected or Power Switch is turned OFF!!!");
+    else if (Lipo_level_cal > 160)
+      SerialCom->println("!Lipo is Overchanged!!!");
+    else {
+      SerialCom->println("Lipo voltage too LOW, any lower and the lipo with be damaged");
+      SerialCom->print("Please Re-charge Lipo:");
+      SerialCom->print(Lipo_level_cal);
+      SerialCom->println("%");
+    }
+
+    Low_voltage_counter++;
+    if (Low_voltage_counter > 5)
+      return false;
+    else
+      return true;
+  }
 }
