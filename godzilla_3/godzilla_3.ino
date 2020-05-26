@@ -65,6 +65,8 @@ const byte fanPin = 53; // Really unsure
 
 // ====================== Variables ======================= 
 
+float loopTime = 10; // Time for each loop in ms
+
 // Controller gains
 float kP_servoAngle = 0.001f;
 float kI_servoAngle = 0.0f;
@@ -118,11 +120,16 @@ void setup() {
 }
 
 void loop() {
-  // Running the state machines
-  FinishedRun();
-  DrivingRun();
-  ExtinguishRun();
-  ScanningRun();
+  // Running the state machines every loopTime
+  static unsigned long lastMillis;  
+  unsigned int deltaTime = millis() - lastMillis;
+  if (deltaTime >= loopTime) {
+    lastMillis = millis();
+    FinishedRun();
+    DrivingRun();
+    ExtinguishRun(deltaTime);
+    ScanningRun(deltaTime);
+  }
 }
 
 // =================== State machines =========================
@@ -153,8 +160,7 @@ void DrivingRun() {
   }
 }
 
-void ExtinguishRun() {
-    unsigned int deltaTime = 1;
+void ExtinguishRun(float deltaTime) {
     switch (extinguishingState) {
     case NO_ACTION_EXTINGUISHING:
       if (startFireFighting)
@@ -170,8 +176,7 @@ void ExtinguishRun() {
   }
 }
 
-void ScanningRun() {
-  unsigned int deltaTime = 1;
+void ScanningRun(float deltaTime) {
   switch (scanningState) {
     case NO_ACTION_SCANNING:
       if (startSearching)
