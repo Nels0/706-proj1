@@ -15,11 +15,6 @@
 // TODO - implement error for GetServoAngle function
 // TODO - change fanServoPin
 // TODO - change fanPin
-// TODO - Implement deltaTime
-// TODO - reset state transition conditions every loop - e.g. startFireFighting = false and fireFound = false at the start of each loop... 
-//        or maybe this wont work because the command to startFireFighting might be set to true after the firefighting state is called? idk.
-//        Might need to reset it once the state transition happens. Or maybe we want to keep them on until the state is finished? Like 
-//        having the fireFound to be true until the fire is put out
 // TODO - Add DriveToFire algorithm
 // TODO - Add fire detection to the repositioning state in the scanning sm
 
