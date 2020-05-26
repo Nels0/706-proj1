@@ -21,6 +21,7 @@
 //        Might need to reset it once the state transition happens. Or maybe we want to keep them on until the state is finished? Like 
 //        having the fireFound to be true until the fire is put out
 // TODO - Add DriveToFire algorithm
+// TODO - Add fire detection to the repositioning state in the scanning sm
 
 // ======================== Enums =========================
 enum FINISHED_SM {
@@ -89,11 +90,13 @@ SCANNING_SM scanningState = NO_ACTION_SCANNING;
 float irFront = 0;
 float irBack = 0; 
 
-
 // Track related
 int firesPutOut = 0;
 bool fireFound = false;
 bool startSearching = true; 
+bool startFireFighting = false;
+float repositionSpeed = 150;
+float irThreshold = 20;
 
 // Phototransistors
 float photoAverage;
@@ -101,6 +104,8 @@ float photoAverage;
 // Fan
 int toggle = 0; 
 unsigned int startTime;
+float fanOnTime = 10000; // ms
+float fanAngleThreshold = 0.5;
 
 // Gyro
 int currentAngle = 0;
@@ -138,111 +143,47 @@ void DrivingRun() {
     case NO_ACTION_DRIVING:
       if (fireFound) {
         drivingState = DRIVING;
+        fireFound = false;
       }
       break;
     case DRIVING:
       drivingState = DriveToFire();
+      startFireFighting = true;
       break;
   }
 }
 
 void ExtinguishRun() {
     unsigned int deltaTime = 1;
-    // TODO
-
     switch (extinguishingState) {
     case NO_ACTION_EXTINGUISHING:
-      if (photoAverage >= 1000) {
-        // Arbitruary value of 1000
-        // change later
-        startSearching = false; 
-        extinguishingState = ALIGNING; 
-      }
+      if (startFireFighting)
+        extinguishingState = ALIGNING;
+        startFireFighting = false;
       break;
     case ALIGNING:
-      ServoWrite(GetServoPulse(deltaTime)); 
-      if (GetServoPulse(deltaTime) <= 0.5) {
-        // Arbitruary value of 0.5
-        // change later
-        extinguishingState = EXTINGUISHING; 
-      } else {
-        extinguishingState = ALIGNING; 
-      }
+      extinguishingState = AlignFan(deltaTime);
       break;
     case EXTINGUISHING:
-      extinguishingState = RunFan(); 
+      extinguishingState = RunFan();
       break;
   }
-}
-
-EXTINGUISHING_SM RunFan() {
-  // Unsure whether this is how you turn on the fan
-  digitalWrite(fanPin, HIGH); 
-  extinguishingState = EXTINGUISHING; 
-
-  // Reference time is when extinguishing state first starts
-  if (toggle == 0) {
-    toggle = 1; 
-    startTime = millis(); 
-  }
-
-  // Stops fan once it has been turned on for 10s
-  if (millis() - startTime >= 10000) {
-    digitalWrite(fanPin, LOW);
-    startSearching = true; 
-    toggle = 0; 
-    firesPutOut++; 
-    extinguishingState = NO_ACTION_EXTINGUISHING; 
-  }
-
-  return extinguishingState; 
 }
 
 void ScanningRun() {
   unsigned int deltaTime = 1;
-  // TODO
-
   switch (scanningState) {
     case NO_ACTION_SCANNING:
-      if (startSearching) {
-        scanningState = SCANNING; 
-      }
+      if (startSearching)
+        scanningState = SCANNING;
+        startSearching = false;
       break;
     case SCANNING:
       scanningState = Scanning(deltaTime); 
       break;
     case REPOSITION:
-      startSearching = false; 
-      MotorWrite(0, 150, 0);
-      if (irFront <= 20) {
-        startSearching = true; 
-        scanningState = SCANNING; 
-      } 
-      if (fireFound) {
-        scanningState = NO_ACTION_SCANNING; 
-      }
+      scanningState = Repositioning();
       break;
-  }
-}
-
-SCANNING_SM Scanning(int deltaTime) {
-  float desiredAngle = 420; 
-  float error = desiredAngle - currentAngle;
-
-  float Wz = (kP_Wz2 * error);
-  MotorWrite(0, 0, Wz);
-
-  // Need to read phototransistors
-  // Arbuitary value
-  if (photoAverage >= 1000) {
-    fireFound = true;
-    return NO_ACTION_SCANNING; 
-  }
-
-  if (abs(error) < 0.5 && Wz < 5) {
-    return REPOSITION;
-  } else {
-    return SCANNING;
   }
 }
 
@@ -250,6 +191,59 @@ SCANNING_SM Scanning(int deltaTime) {
 DRIVING_SM DriveToFire() {
   // Implement driving algorithm plz
   return DRIVING;
+}
+
+EXTINGUISHING_SM RunFan() {
+  digitalWrite(fanPin, HIGH);
+  MotorWrite(0, 0, 0);
+  // Reference time is when extinguishing state first starts
+  if (toggle == 0) {
+    toggle = 1; 
+    startTime = millis(); 
+  }
+  // Stops fan once it has been turned on for 10s
+  if (millis() - startTime >= fanOnTime) {
+    digitalWrite(fanPin, LOW);
+    startSearching = true; 
+    toggle = 0; 
+    firesPutOut++;
+    return NO_ACTION_EXTINGUISHING; 
+  }
+  return EXTINGUISHING; 
+}
+
+EXTINGUISHING_SM AlignFan(float deltaTime) {
+  float controllerOutput = GetServoPulse(deltaTime);
+  ServoWrite(controllerOutput); 
+  MotorWrite(0, 0, 0);
+  if (controllerOutput <= fanAngleThreshold) {
+    return EXTINGUISHING; 
+  }
+  return ALIGNING; 
+}
+
+SCANNING_SM Repositioning() {
+  MotorWrite(0, repositionSpeed, 0);
+  if (irFront <= irThreshold) {
+    scanningState = SCANNING; 
+  }
+}
+
+SCANNING_SM Scanning(int deltaTime) {
+  float desiredAngle = 420; 
+  float error = desiredAngle - currentAngle;
+  float Wz = (kP_Wz2 * error);
+  MotorWrite(0, 0, Wz);
+  // Need to read phototransistors
+  // Arbuitary value
+  if (photoAverage >= 1000) {
+    fireFound = true;
+    return NO_ACTION_SCANNING; 
+  }
+  if (abs(error) < 0.5 && Wz < 5) {
+    return REPOSITION;
+  }
+  return SCANNING;
 }
 
 // =================== Controllers ============================
