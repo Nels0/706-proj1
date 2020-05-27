@@ -71,8 +71,6 @@ HardwareSerial *SerialCom;
 
 // Controller gains
 float kP_servoAngle = 0.001f;
-float kI_servoAngle = 0.0f;
-float servoAngle_windup = 10.0f;
 
 // Motors
 float omegaToPulse = 21.3f;
@@ -101,13 +99,13 @@ bool fireFound = false;
 bool startSearching = true; 
 bool startFireFighting = false;
 float repositionSpeed = 150;
-float irThreshold = 20; // maybe make "irThreshold" "search distance threshold" or something without IR in the name
+float searchDistanceThreshold = 20;
 
 // Phototransistors
 float photoAverage; //TODO: actually read these lol
 
 // Fan
-int toggle = 0; //what a name
+bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
 unsigned int startTime;
 float fanOnTime = 10000; // ms
 float fanAngleThreshold = 0.5;
@@ -161,7 +159,6 @@ void DrivingRun() {
       break;
     case DRIVING:
       drivingState = DriveToFire();
-      startFireFighting = true; // are u sure??? should probably be called by DriveToFire when we get there
       break;
   }
 }
@@ -256,17 +253,16 @@ DRIVING_SM DriveToFire() {
 
 EXTINGUISHING_SM RunFan() {
   digitalWrite(fanPin, HIGH);
-  MotorWrite(0, 0, 0); //again i don't think this should touch the movements
   // Reference time is when extinguishing state first starts
-  if (toggle == 0) {
-    toggle = 1; 
+  if (!fanStartingTimeMeasured) {
+    fanStartingTimeMeasured = true; 
     startTime = millis(); 
   }
   // Stops fan once it has been turned on for 10s
   if (millis() - startTime >= fanOnTime) {
     digitalWrite(fanPin, LOW);
     startSearching = true; 
-    toggle = 0; 
+    fanStartingTimeMeasured = false; 
     firesPutOut++;
     return NO_ACTION_EXTINGUISHING; 
   }
@@ -274,10 +270,9 @@ EXTINGUISHING_SM RunFan() {
 }
 
 EXTINGUISHING_SM AlignFan(float deltaTime) {
-  float controllerOutput = GetServoPulse(deltaTime);
+  float controllerOutput = FanAlignController(deltaTime);
   ServoWrite(controllerOutput); 
-  MotorWrite(0, 0, 0); // is this the job of this function? I don't think this function should touch movement
-  if (controllerOutput <= fanAngleThreshold) { //what if this never returns true?
+  if (controllerOutput <= fanAngleThreshold) {
     return EXTINGUISHING; 
   }
   return ALIGNING; 
@@ -285,23 +280,24 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
 
 SCANNING_SM Repositioning() {
   MotorWrite(0, repositionSpeed, 0);
-  if (irFront <= irThreshold) { 
+  if (irFront <= searchDistanceThreshold) { 
     scanningState = SCANNING; 
   }
 }
 
 SCANNING_SM Scanning(int deltaTime) {
-  float desiredAngle = 270; //360 - 90 as our sensors cover ~90 deg
+  float desiredAngle = 270; // 360 - 90 as our sensors cover ~90 deg
   float error = desiredAngle - currentAngle;
   float Wz = (kP_Wz2 * error);
   MotorWrite(0, 0, Wz);
+  // TODO
   // Need to read phototransistors
-  // Arbuitary value
-  if (photoAverage >= 1000) { //probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
+  // 1000 Arbuitary value
+  if (photoAverage >= 1000) { // probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
-  if (abs(error) < 0.5 && Wz < 5) { //has completed a full scan
+  if (abs(error) < 0.5 && Wz < 5) { // has completed a full scan
     return REPOSITION;
   }
   return SCANNING;
@@ -309,8 +305,7 @@ SCANNING_SM Scanning(int deltaTime) {
 
 // =================== Controllers ============================
 // Servo angle controller
-float GetServoPulse(int deltaTime) { // could do with a better name (i.e fanaligncontroller)
-  static float I_servoAngle;
+float FanAlignController(int deltaTime) {
   float error = 0;
 
   // TODO
@@ -319,10 +314,7 @@ float GetServoPulse(int deltaTime) { // could do with a better name (i.e fanalig
   // Idea: Error is most likely minimised when the front facing phototransistors have similar values
   // Eg.: error = phototransistor1 - phototransistor4
 
-  if(abs(I_servoAngle) < servoAngle_windup){ // better to use sat2
-    I_servoAngle += error * deltaTime/1000;
-  }
-  return (kP_servoAngle * error) + (kI_servoAngle * I_servoAngle); //likely a P controller is sufficient, fan angle probably type 1 system
+  return kP_servoAngle * error;
 }
 
 // ================== Sensor functions =======================
