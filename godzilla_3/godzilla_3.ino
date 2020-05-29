@@ -90,8 +90,9 @@ EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
 SCANNING_SM scanningState = NO_ACTION_SCANNING;
 
 // IR Sensors
+float irFrontRight = 0;
+float irFrontLeft = 0; 
 float irFront = 0;
-float irBack = 0; 
 
 // Track related
 int firesPutOut = 0;
@@ -247,8 +248,23 @@ RUNNING_SM Stopped() {
 }
 
 DRIVING_SM DriveToFire() {
-  // Implement driving algorithm plz
-  return DRIVING;
+  // move forward
+  
+  if (photoAverage > 40) { // not close enough to fire
+    if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
+      if (irFrontRight > irFrontLeft) {
+         // move right for 10ccm
+      } else {
+        // move left for 10cm
+      }
+    } else {
+      return DRIVING;
+    }
+  }
+  else {
+    startFireFighting = true;
+  }
+  
 }
 
 EXTINGUISHING_SM RunFan() {
@@ -317,6 +333,7 @@ float FanAlignController(int deltaTime) {
   return kP_servoAngle * error;
 }
 
+
 // ================== Sensor functions =======================
 
 void ReadGyro(int deltaTime) {
@@ -375,6 +392,7 @@ int Sat2(int value, int maxValue, int minValue) {
 int KinematicCalc(int Vx, int Vy, int Wz) {
   return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
 }
+
 
 // ======================= Battery ========================
 boolean is_battery_voltage_OK()
