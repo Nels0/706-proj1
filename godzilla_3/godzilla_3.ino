@@ -54,24 +54,30 @@ const byte motor1Pin = 46;
 const byte motor3Pin = 47;
 const byte motor4Pin = 50;
 const byte motor2Pin = 51;
-const byte fanServoPin = 52; 
+const byte fanServoPin = 34; 
+const byte fanMosfetPin = 36;
 Servo motor1;
 Servo motor2;
 Servo motor3;
 Servo motor4;
 Servo fanServo;
 //Fan
-const byte fanPin = 53; // TODO - Change these
+const byte fanPin = 53; // TODO - remove, there is fanServoPin and fanMosfetPin
 // IR
-const byte irFrontLeftPin = 54; // TODO - Change these
-const byte irFrontRightPin = 55;
-const byte irSideLeftPin = 56;
-const byte irSideRightPin = 57;
+const byte irFrontLeftPin = A8;
+const byte irFrontRightPin = A9;
+const byte irSideLeftPin = A10;
+const byte irSideRightPin = A11;
 // Sonar
-const byte sonarTrigPin = 17; // TODO - change these
+const byte sonarTrigPin = 17; // TODO - sonar pins
 const byte sonarEchoPin = 18;
 // Gyro
-const byte gyroPin = A2; // TODO - Change this
+const byte gyroPin = A2;
+// Phototransistors
+const byte photoTransistor1 = A4;
+const byte photoTransistor2 = A5;
+const byte photoTransistor3 = A6;
+const byte photoTransistor4 = A7;
 
 // ====================== Variables ======================= 
 
@@ -121,7 +127,7 @@ float repositionSpeed = 150;
 float searchDistanceThreshold = 20;
 
 // Phototransistors
-float photoAverage; // TODO: actually read these lol, are we actually going to use photoaverage? We are going to use sonar for detecting distance to fire
+float photoAverage; // TODO: actually read these lol
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
