@@ -255,7 +255,7 @@ RUNNING_SM Running() {
     ExtinguishRun(deltaTime);
     ScanningRun(deltaTime);
   }
-  if (!is_battery_voltage_OK()) return STOPPED;
+  if (!IsBatteryVoltageOK()) return STOPPED;
   return RUNNING;  
 }
 
@@ -269,7 +269,7 @@ RUNNING_SM Stopped() {
     previous_millis = millis();
     SerialCom->println("STOPPED---------");
     //500ms timed if statement to check lipo and output speed settings
-    if (is_battery_voltage_OK()) {
+    if (IsBatteryVoltageOK()) {
       SerialCom->print("Lipo OK waiting of voltage Counter 2 < ");
       SerialCom->println(counter_lipo_voltage_ok);
       counter_lipo_voltage_ok++;
@@ -537,41 +537,41 @@ int KinematicCalc(int Vx, int Vy, int Wz) {
 }
 
 // ======================= Battery ========================
-boolean is_battery_voltage_OK()
+boolean IsBatteryVoltageOK()
 {
-  static byte Low_voltage_counter;
-  static unsigned long previous_millis;
+  static byte lowVoltageCounter;
+  static unsigned long previousMillis;
 
-  int Lipo_level_cal;
-  int raw_lipo;
+  int lipoLevelCal;
+  int rawLipo;
   //the voltage of a LiPo cell depends on its chemistry and varies from about 
   //3.5V (discharged) = 717(3.5V Min) https://oscarliang.com/lipo-battery-guide/
   //to about 4.20-4.25V (fully charged) = 860(4.2V Max)
   //Lipo Cell voltage should never go below 3V, So 3.5V is a safety factor.
-  raw_lipo = analogRead(A0);
+  rawLipo = analogRead(A0);
   //Serial.println(raw_lipo * 5 / 1023);
-  Lipo_level_cal = (raw_lipo - 717);
-  Lipo_level_cal = Lipo_level_cal * 100;
-  Lipo_level_cal = Lipo_level_cal / 143;
+  lipoLevelCal = (rawLipo - 717);
+  lipoLevelCal = lipoLevelCal * 100;
+  lipoLevelCal = lipoLevelCal / 143;
 
-  if (Lipo_level_cal > 0 && Lipo_level_cal < 160) {
-    previous_millis = millis();
-    Low_voltage_counter = 0;
+  if (lipoLevelCal > 0 && lipoLevelCal < 160) {
+    previousMillis = millis();
+    lowVoltageCounter = 0;
     return true;
   } else {
-    if (Lipo_level_cal < 0)
+    if (lipoLevelCal < 0)
       SerialCom->println("Lipo is Disconnected or Power Switch is turned OFF!!!");
-    else if (Lipo_level_cal > 160)
+    else if (lipoLevelCal > 160)
       SerialCom->println("!Lipo is Overchanged!!!");
     else {
       SerialCom->println("Lipo voltage too LOW, any lower and the lipo with be damaged");
       SerialCom->print("Please Re-charge Lipo:");
-      SerialCom->print(Lipo_level_cal);
+      SerialCom->print(lipoLevelCal);
       SerialCom->println("%");
     }
 
-    Low_voltage_counter++;
-    if (Low_voltage_counter > 5)
+    lowVoltageCounter++;
+    if (lowVoltageCounter > 5)
       return false;
     else
       return true;
