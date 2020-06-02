@@ -1,6 +1,7 @@
 // ========================================================================
 // Defines and includes
 #include <Servo.h>
+#define BUFFERLENGTH 20
 
 // System coordinates and orientation
 /* |      ____=____
@@ -63,6 +64,11 @@ Servo fanServo;
 //Fan
 const byte fanPin = 53; // Really unsure
 
+// IR
+const byte irFrontLeftPin = 54; // TODO - Change these
+const byte irFrontRightPin = 55;
+const byte irSideLeftPin = 56;
+const byte irSideRightPin = 57;
 
 // ====================== Variables ======================= 
 
@@ -90,9 +96,21 @@ EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
 SCANNING_SM scanningState = NO_ACTION_SCANNING;
 
 // IR Sensors
-float irFrontRight = 0;
-float irFrontLeft = 0; 
 float irFront = 0;
+
+float irFrontLeft = 0;
+float irFrontRight = 0;
+float irSideLeft = 0;
+float irSideRight = 0;
+float irFrontLeftBuffer[BUFFERLENGTH];
+float irFrontRightBuffer[BUFFERLENGTH];
+float irSideLeftBuffer[BUFFERLENGTH];
+float irSideRightBuffer[BUFFERLENGTH];
+int irFrontLeftidx = 0;
+int irFrontRightidx = 0;
+int irSideLeftidx = 0;
+int irSideRightidx = 0;
+
 
 // Track related
 int firesPutOut = 0;
@@ -200,8 +218,10 @@ void ScanningRun(float deltaTime) {
 RUNNING_SM Initialising() {
   EnableMotors();
   // TODO
-  // IrSetup(irFrontPin, irFrontBuffer);  
-  // IrSetup(irBackPin, irBackBuffer);
+  SetupIR(irFrontLeftPin, irFrontLeftBuffer);  
+  SetupIR(irFrontRightPin, irFrontRightBuffer);
+  SetupIR(irSideLeftPin, irSideLeftBuffer);  
+  SetupIR(irSideRightPin, irSideRightBuffer);
   // GyroSetup();
   // SonarSetup();
   return RUNNING;
@@ -296,7 +316,7 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
 
 SCANNING_SM Repositioning() {
   MotorWrite(0, repositionSpeed, 0);
-  if (irFront <= searchDistanceThreshold) { 
+  if (1 <= searchDistanceThreshold) { // TODO - replace "1" with sonar distance
     scanningState = SCANNING; 
   }
 }
@@ -335,6 +355,37 @@ float FanAlignController(int deltaTime) {
 
 
 // ================== Sensor functions =======================
+void SetupIR(byte irPin, float irBuffer[]){
+  pinMode(irPin, INPUT); 
+  // Filter part
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) {
+    irBuffer[i] = 0;
+  }
+}
+
+void ReadSensors(int deltaTime){
+  ReadGyro(deltaTime); // TODO
+  ReadIR(irFrontLeftPin, irFrontLeft, irFrontLeftBuffer, irFrontLeftidx);
+  ReadIR(irFrontRightPin, irFrontRight, irFrontRightBuffer, irFrontRightidx);
+  ReadIR(irSideLeftPin, irSideLeft, irSideLeftBuffer, irSideLeftidx);
+  ReadIR(irSideRightPin, irSideRight, irSideRightBuffer, irSideRightidx);
+  // TODO - add sonar reading
+  // TODO - add phototransistor reading
+}
+
+void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
+  // NOTE: All "values" in buffer are divided by buffer length  
+  float newValue = 448.35f * pow(analogRead(irPin), -0.593f) / BUFFERLENGTH;
+  // n.b first 5 values will be off due to zero-initialisation
+  value -= irBuffer[idx]; // Subtract last number from average
+  value += newValue; // Add new number to average
+  irBuffer[idx] = newValue; // Overwrite new number in buffer
+  if (idx < BUFFERLENGTH - 1){ // Increment buffer index
+    idx++;
+  } else {
+    idx = 0;
+  }
+}
 
 void ReadGyro(int deltaTime) {
   currentAngle = 0;
