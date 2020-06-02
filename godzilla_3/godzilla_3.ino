@@ -60,15 +60,16 @@ Servo motor2;
 Servo motor3;
 Servo motor4;
 Servo fanServo;
-
 //Fan
-const byte fanPin = 53; // Really unsure
-
+const byte fanPin = 53; // TODO - Change these
 // IR
 const byte irFrontLeftPin = 54; // TODO - Change these
 const byte irFrontRightPin = 55;
 const byte irSideLeftPin = 56;
 const byte irSideRightPin = 57;
+// Sonar
+const byte sonarTrigPin = 17; // TODO - change these
+const byte sonarEchoPin = 18;
 
 // ====================== Variables ======================= 
 
@@ -80,9 +81,9 @@ float kP_servoAngle = 0.001f;
 
 // Motors
 float omegaToPulse = 21.3f;
-float L1 = 7.5f; //distance from centre to front axe
-float L2 = 8.5f; //distance from centre to left/right wheen centres
-float Rw = 2.25f; //wheel radius in cm
+float L1 = 7.5f; // Distance from centre to front axe
+float L2 = 8.5f; // Distance from centre to left/right wheen centres
+float Rw = 2.25f; // Wheel radius in cm
 int maxPulseValue = 250;
 int minPulseValue = 90; 
 int minServoPulseValue = 10;
@@ -96,8 +97,6 @@ EXTINGUISHING_SM extinguishingState = NO_ACTION_EXTINGUISHING;
 SCANNING_SM scanningState = NO_ACTION_SCANNING;
 
 // IR Sensors
-float irFront = 0;
-
 float irFrontLeft = 0;
 float irFrontRight = 0;
 float irSideLeft = 0;
@@ -111,7 +110,6 @@ int irFrontRightidx = 0;
 int irSideLeftidx = 0;
 int irSideRightidx = 0;
 
-
 // Track related
 int firesPutOut = 0;
 bool fireFound = false;
@@ -121,7 +119,7 @@ float repositionSpeed = 150;
 float searchDistanceThreshold = 20;
 
 // Phototransistors
-float photoAverage; //TODO: actually read these lol
+float photoAverage; // TODO: actually read these lol, are we actually going to use photoaverage? We are going to use sonar for detecting distance to fire
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -131,6 +129,13 @@ float fanAngleThreshold = 0.5;
 
 // Gyro
 int currentAngle = 0;
+
+// Sonar
+int lastPing = 0;
+int sonaridx = 0;
+float sonarBuffer[BUFFERLENGTH];
+float sonarDistance = 999;
+long sonarRiseMicros;
 
 // Rotation
 float kP_Wz2 = 0.02;
@@ -223,7 +228,7 @@ RUNNING_SM Initialising() {
   SetupIR(irSideLeftPin, irSideLeftBuffer);  
   SetupIR(irSideRightPin, irSideRightBuffer);
   // GyroSetup();
-  // SonarSetup();
+  SetupSonar();
   return RUNNING;
 }
 
@@ -326,8 +331,6 @@ SCANNING_SM Scanning(int deltaTime) {
   float error = desiredAngle - currentAngle;
   float Wz = (kP_Wz2 * error);
   MotorWrite(0, 0, Wz);
-  // TODO
-  // Need to read phototransistors
   // 1000 Arbuitary value
   if (photoAverage >= 1000) { // probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
     fireFound = true;
@@ -353,14 +356,22 @@ float FanAlignController(int deltaTime) {
   return kP_servoAngle * error;
 }
 
-
 // ================== Sensor functions =======================
 void SetupIR(byte irPin, float irBuffer[]){
   pinMode(irPin, INPUT); 
-  // Filter part
-  for (int i = 0; i < BUFFERLENGTH - 1; i++) {
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) { // Filter part
     irBuffer[i] = 0;
   }
+}
+
+void SetupSonar(){
+  pinMode(sonarTrigPin, OUTPUT);
+  pinMode(sonarEchoPin, INPUT);
+  attachInterrupt(digitalPinToInterrupt(sonarEchoPin), echoRead, CHANGE); // Attach interrupt to echo pin
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) { // Filter part
+    sonarBuffer[i] = 999;
+  }
+  PingSonar();
 }
 
 void ReadSensors(int deltaTime){
@@ -369,7 +380,7 @@ void ReadSensors(int deltaTime){
   ReadIR(irFrontRightPin, irFrontRight, irFrontRightBuffer, irFrontRightidx);
   ReadIR(irSideLeftPin, irSideLeft, irSideLeftBuffer, irSideLeftidx);
   ReadIR(irSideRightPin, irSideRight, irSideRightBuffer, irSideRightidx);
-  // TODO - add sonar reading
+  PingSonar();
   // TODO - add phototransistor reading
 }
 
@@ -389,6 +400,47 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
 
 void ReadGyro(int deltaTime) {
   currentAngle = 0;
+}
+
+void PingSonar(){
+  // Gets HC-SR04 to seng sonar ping at 40Hz
+  if (millis()-lastPing > 25){ // Runs at 40hz (25ms)
+    lastPing = millis();
+    // Trigger HIGH pulse of 10us
+    digitalWrite(sonarTrigPin, LOW);
+    delayMicroseconds(5);
+    digitalWrite(sonarTrigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(sonarTrigPin, LOW);
+  }
+}
+
+// Sonar readings (attached to interrupt)
+void echoRead(){
+  //Reads how long the echo pulse is
+  if(digitalRead(sonarEchoPin) == HIGH){
+    //measure the start of the pulse
+    sonarRiseMicros = micros();
+  } else {
+    //measure the end of the pulse 
+    long signalDuration = micros() - sonarRiseMicros;
+    //Calculate distance
+    if(signalDuration > 0 ){
+      float newValue = ((signalDuration/2.0)*0.0343 + 7.5) / BUFFERLENGTH;
+      // Convert to distance by multiplying by speed of sound, 
+      // accounting for returned wave by division of 2
+      // offset by 7.5cm to account for sensor positioning on robot
+      // Filter:
+      sonarDistance -= sonarBuffer[sonaridx]; // Subtract last number from average
+      sonarDistance += newValue; // Add new number to average
+      sonarBuffer[sonaridx] = newValue; // Overwrite new number in buffer
+      if (sonaridx < BUFFERLENGTH - 1){ // Increment buffer index
+        sonaridx++;
+      } else {
+        sonaridx = 0;
+      }
+    } 
+  }
 }
 
 // ================== Actuation functions =======================
@@ -443,7 +495,6 @@ int Sat2(int value, int maxValue, int minValue) {
 int KinematicCalc(int Vx, int Vy, int Wz) {
   return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
 }
-
 
 // ======================= Battery ========================
 boolean is_battery_voltage_OK()
