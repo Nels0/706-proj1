@@ -4,14 +4,15 @@
 #define BUFFERLENGTH 20
 
 // System coordinates and orientation
-/* |      ____=____
- * |  [1]-|       |-[2]       ^ X
- * |      o   ^   |       Y   |
- * |      |   |   |       <---+ 
- * |      o   |   |        Each motor has matching coordinate system
- * |  [3]-|_______|-[4]    Positive angular velocity counter-clockwise
+/*        _o__=__o_
+ *    [1]-|   #   |-[2]       ^ X
+ *        o   ^   o       Y   |
+ *        |   |   |       <---+ 
+ *        |   |   |        Each motor has matching coordinate system
+ *    [3]-|_______|-[4]    Positive angular velocity counter-clockwise
  * 
- */
+ *  o - IR, # - fan/servo/phototransistors, = - sonar
+ */ 
 
 // TODO - implement error for GetServoAngle function
 // TODO - change fanServoPin
