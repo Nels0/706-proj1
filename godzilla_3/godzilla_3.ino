@@ -70,6 +70,8 @@ const byte irSideRightPin = 57;
 // Sonar
 const byte sonarTrigPin = 17; // TODO - change these
 const byte sonarEchoPin = 18;
+// Gyro
+const byte gyroPin = A2; // TODO - Change this
 
 // ====================== Variables ======================= 
 
@@ -127,8 +129,12 @@ unsigned int startTime;
 float fanOnTime = 10000; // ms
 float fanAngleThreshold = 0.5;
 
-// Gyro
-int currentAngle = 0;
+// Gyrosope 
+float gyroSupplyVoltage = 5;
+float gyroZeroVoltage = 0;
+float gyroSensitivity = 0.0070;
+float rotationThreshold = 1;
+float currentAngle = 0;
 
 // Sonar
 int lastPing = 0;
@@ -227,7 +233,7 @@ RUNNING_SM Initialising() {
   SetupIR(irFrontRightPin, irFrontRightBuffer);
   SetupIR(irSideLeftPin, irSideLeftBuffer);  
   SetupIR(irSideRightPin, irSideRightBuffer);
-  // GyroSetup();
+  SetupGyro();
   SetupSonar();
   return RUNNING;
 }
@@ -374,6 +380,22 @@ void SetupSonar(){
   PingSonar();
 }
 
+void SetupGyro() {
+  int i;
+  int gyroValue;
+  float sum = 0;    
+  pinMode(gyroPin,INPUT);
+  Serial.println("Getting the gyro zero voltage...");
+  // Read 100 values of voltage when gyro is at still, to calculate the zero-drift
+  for (i=0; i<100; i++) {  
+    gyroValue = analogRead(gyroPin);  
+    sum += gyroValue;  
+    delay(5);
+  }
+  gyroZeroVoltage = sum/100;
+  Serial.println("Gyro Calibrated!");
+}
+
 void ReadSensors(int deltaTime){
   ReadGyro(deltaTime); // TODO
   ReadIR(irFrontLeftPin, irFrontLeft, irFrontLeftBuffer, irFrontLeftidx);
@@ -399,7 +421,19 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
 }
 
 void ReadGyro(int deltaTime) {
-  currentAngle = 0;
+    //OoO to preserve precision
+  float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
+  angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
+  if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
+    // we are running a loop in T. one second will run (1000/T).  
+    float angleChange = angularVelocity * deltaTime / 1000.0f; 
+    currentAngle -= angleChange; // Negative due to right handed coordinate system
+  }
+  // keep the angle between 0-360
+  if (currentAngle < 0)    
+    currentAngle += 360;
+  else if (currentAngle > 359)
+    currentAngle -= 360;
 }
 
 void PingSonar(){
