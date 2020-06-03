@@ -287,6 +287,25 @@ RUNNING_SM Stopped() {
 
 DRIVING_SM DriveToFire() {
   // move forward
+
+  //point at fire
+  //drive forward
+  //drive sideways as a function of the difference between front distance sensors
+  //don't crash into side obstacles (using side sensors to control sideways velocity)
+
+
+//Concept:
+
+  // point at the fire
+  // Wz = kP_Wz2 * photoError;
+
+  // Forward velocity controller like the last one
+  // Vy = sat2(max(IRdistance) * KP)
+  
+  // move sideways based on obstacles, but also it has th 1/side^2 terms which will overwhelm if it gets laterally close to something
+  // Vx = kp * (irfrontright - irFrontLeft) + 1/(irLeft ^ 2) - 1/(irRight ^ 2)
+  // maybe we shouldn't avoid obstacles when we're close to the fire (i.e above a certain Phototransitior brightness) or we'll avoid the candle
+  // add an if(luminance > threshold) to stop avoiding and then if(luminance > threshold && frontdist < threshold) to start firefighting
   
   if (photoAverage > 40) { // not close enough to fire
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
@@ -313,6 +332,7 @@ EXTINGUISHING_SM RunFan() {
     startTime = millis(); 
   }
   // Stops fan once it has been turned on for 10s
+  //TODO: change to detect whether the fire is out (i.e photoavg < threshold)
   if (millis() - startTime >= fanOnTime) {
     digitalWrite(fanPin, LOW);
     startSearching = true; 
@@ -470,7 +490,7 @@ void echoRead(){
       float newValue = ((signalDuration/2.0)*0.0343 + 7.5) / BUFFERLENGTH;
       // Convert to distance by multiplying by speed of sound, 
       // accounting for returned wave by division of 2
-      // offset by 7.5cm to account for sensor positioning on robot
+      // offset by 7.5cm to account for sensor positioning on robot TODO: check offset
       // Filter:
       sonarDistance -= sonarBuffer[sonaridx]; // Subtract last number from average
       sonarDistance += newValue; // Add new number to average
