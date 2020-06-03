@@ -128,7 +128,11 @@ float repositionSpeed = 150;
 float searchDistanceThreshold = 20;
 
 // Phototransistors
-float photoAverage; // TODO: actually read these lol
+float photoTransistorDistance1;
+float photoTransistorDistance2;
+float photoTransistorDistance3;
+float photoTransistorDistance4; 
+float photoAverageDistance;
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -307,7 +311,7 @@ DRIVING_SM DriveToFire() {
   // maybe we shouldn't avoid obstacles when we're close to the fire (i.e above a certain Phototransitior brightness) or we'll avoid the candle
   // add an if(luminance > threshold) to stop avoiding and then if(luminance > threshold && frontdist < threshold) to start firefighting
   
-  if (photoAverage > 40) { // not close enough to fire
+  if (photoAverageDistance > 40) { // not close enough to fire
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
       if (irFrontRight > irFrontLeft) {
          // move right for 10ccm
@@ -365,7 +369,7 @@ SCANNING_SM Scanning(int deltaTime) {
   float Wz = (kP_Wz2 * error);
   MotorWrite(0, 0, Wz);
   // 1000 Arbuitary value
-  if (photoAverage >= 1000) { // probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
+  if (photoAverageDistance <= 80) { // probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
@@ -380,11 +384,8 @@ SCANNING_SM Scanning(int deltaTime) {
 float FanAlignController(int deltaTime) {
   float error = 0;
 
-  // TODO
-  // Need to decide on phototransistor arrangement on servo motor 
-  // and how the error would be decided
-  // Idea: Error is most likely minimised when the front facing phototransistors have similar values
-  // Eg.: error = phototransistor1 - phototransistor4
+  // Weighted error, more sensitive to phototransistor 2 and 3 misallignment to fire
+  float error = phototransistorDistance1 - phototransistorDistance4 + 2*photoTransistorDistance2 - 2*photoTransistorDistance3; 
 
   return kP_servoAngle * error;
 }
@@ -424,13 +425,13 @@ void SetupGyro() {
 }
 
 void ReadSensors(int deltaTime){
-  ReadGyro(deltaTime); // TODO
+  ReadGyro(deltaTime); 
   ReadIR(irFrontLeftPin, irFrontLeft, irFrontLeftBuffer, irFrontLeftidx);
   ReadIR(irFrontRightPin, irFrontRight, irFrontRightBuffer, irFrontRightidx);
   ReadIR(irSideLeftPin, irSideLeft, irSideLeftBuffer, irSideLeftidx);
   ReadIR(irSideRightPin, irSideRight, irSideRightBuffer, irSideRightidx);
   PingSonar();
-  // TODO - add phototransistor reading
+  ReadPhotoTransistors(); 
 }
 
 void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
@@ -502,6 +503,23 @@ void echoRead(){
       }
     } 
   }
+}
+
+void ReadPhotoTransistors() {
+  // Read voltage values
+  float Voltage1 = analogRead(photoTransistor1);  
+  float Voltage2 = analogRead(photoTransistor2);
+  float Voltage3 = analogRead(photoTransistor3);
+  float Voltage4 = analogRead(photoTransistor4);
+
+  // Convert to distance from light using fitted curve
+  photoTransistorDistance1 = -26.3*(Voltage1^3) + 295.3*(Voltage1^2) - 1103.4*Voltage1 + 1413.9;
+  photoTransistorDistance2 = -26.3*(Voltage2^3) + 295.3*(Voltage2^2) - 1103.4*Voltage2 + 1413.9;
+  photoTransistorDistance3 = -26.3*(Voltage3^3) + 295.3*(Voltage3^2) - 1103.4*Voltage3 + 1413.9;
+  photoTransistorDistance4 = -26.3*(Voltage4^3) + 295.3*(Voltage4^2) - 1103.4*Voltage4 + 1413.9;
+
+  // Used for multiple FSMs
+  photoAverage = (photoTransistorDistance1 + photoTransistorDistance2 + photoTransistorDistance3 + photoTransistorDistance4)/4; 
 }
 
 // ================== Actuation functions =======================
