@@ -70,8 +70,8 @@ const byte irFrontRightPin = A9;
 const byte irSideLeftPin = A10;
 const byte irSideRightPin = A11;
 // Sonar
-const byte sonarTrigPin = 17; // TODO - sonar pins
-const byte sonarEchoPin = 18;
+const byte sonarTrigPin = A14;
+const byte sonarEchoPin = A15;
 // Gyro
 const byte gyroPin = A2;
 // Phototransistors
