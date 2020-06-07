@@ -132,7 +132,7 @@ float photoTransistorDistance1;
 float photoTransistorDistance2;
 float photoTransistorDistance3;
 float photoTransistorDistance4; 
-float photoAverageDistance;
+float photoMinDistance;
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -311,7 +311,7 @@ DRIVING_SM DriveToFire() {
   // maybe we shouldn't avoid obstacles when we're close to the fire (i.e above a certain Phototransitior brightness) or we'll avoid the candle
   // add an if(luminance > threshold) to stop avoiding and then if(luminance > threshold && frontdist < threshold) to start firefighting
   
-  if (photoAverageDistance > 40) { // not close enough to fire
+  if (photoMinDistance > 40) { // not close enough to fire
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
       if (irFrontRight > irFrontLeft) {
          // move right for 10ccm
@@ -358,18 +358,19 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
 
 SCANNING_SM Repositioning() {
   MotorWrite(0, repositionSpeed, 0);
-  if (1 <= searchDistanceThreshold) { // TODO - replace "1" with sonar distance
+  if (sonarDistance <= searchDistanceThreshold) {
     scanningState = SCANNING; 
   }
 }
 
 SCANNING_SM Scanning(int deltaTime) {
+  // This needs to be changed, because it needs to be current angle + 270
   float desiredAngle = 270; // 360 - 90 as our sensors cover ~90 deg
   float error = desiredAngle - currentAngle;
   float Wz = (kP_Wz2 * error);
   MotorWrite(0, 0, Wz);
   // 1000 Arbuitary value
-  if (photoAverageDistance <= 80) { // probably shouldn't be an average but a peak, given the fire won't be seen on all sensors
+  if (photoMinDistance <= 60) { 
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
@@ -513,13 +514,14 @@ void ReadPhotoTransistors() {
   float Voltage4 = analogRead(photoTransistor4);
 
   // Convert to distance from light using fitted curve
-  photoTransistorDistance1 = -26.3*(Voltage1^3) + 295.3*(Voltage1^2) - 1103.4*Voltage1 + 1413.9;
-  photoTransistorDistance2 = -26.3*(Voltage2^3) + 295.3*(Voltage2^2) - 1103.4*Voltage2 + 1413.9;
-  photoTransistorDistance3 = -26.3*(Voltage3^3) + 295.3*(Voltage3^2) - 1103.4*Voltage3 + 1413.9;
-  photoTransistorDistance4 = -26.3*(Voltage4^3) + 295.3*(Voltage4^2) - 1103.4*Voltage4 + 1413.9;
+  // Used distance because is not a linear ratio
+  photoTransistorDistance1 = -26.3*(Voltage1*Voltage1*Voltage1) + 295.3*(Voltage1*Voltage1) - 1103.4*Voltage1 + 1413.9;
+  photoTransistorDistance2 = -26.3*(Voltage2*Voltage2*Voltage2) + 295.3*(Voltage2*Voltage2) - 1103.4*Voltage2 + 1413.9;
+  photoTransistorDistance3 = -26.3*(Voltage3*Voltage3*Voltage3) + 295.3*(Voltage3*Voltage3) - 1103.4*Voltage3 + 1413.9;
+  photoTransistorDistance4 = -26.3*(Voltage4*Voltage4*Voltage4) + 295.3*(Voltage4*Voltage4) - 1103.4*Voltage4 + 1413.9;
 
   // Used for multiple FSMs
-  photoAverage = (photoTransistorDistance1 + photoTransistorDistance2 + photoTransistorDistance3 + photoTransistorDistance4)/4; 
+  photoMinDistance = minValue(); 
 }
 
 // ================== Actuation functions =======================
@@ -569,6 +571,25 @@ int Sat2(int value, int maxValue, int minValue) {
     return 0;
   else 
     return value; 
+}
+
+float minValue() {
+  if ((photoTransistorDistance1 < photoTransistorDistance2) && (photoTransistorDistance1 < photoTransistorDistance3) &&
+  (photoTransistorDistance1 < photoTransistorDistance4)) {
+    return photoTransistorDistance1;
+  }
+  if ((photoTransistorDistance2 < photoTransistorDistance1) && (photoTransistorDistance2 < photoTransistorDistance3) &&
+  (photoTransistorDistance2 < photoTransistorDistance4)) {
+    return photoTransistorDistance2;
+  }
+  if ((photoTransistorDistance3 < photoTransistorDistance1) && (photoTransistorDistance3 < photoTransistorDistance2) &&
+   (photoTransistorDistance3 < photoTransistorDistance4)) {
+     return photoTransistorDistance3;
+   }
+  if ((photoTransistorDistance4 < photoTransistorDistance1) && (photoTransistorDistance4 < photoTransistorDistance2) &&
+   (photoTransistorDistance4 < photoTransistorDistance3)) {
+     return photoTransistorDistance4;
+  }
 }
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
