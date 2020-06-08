@@ -353,6 +353,13 @@ SCANNING_SM Repositioning() {
 
 SCANNING_SM Scanning(int deltaTime) {
   float error = desiredAngle - currentAngle;
+  // If the angle is greater than 180, remove 360 to make it between 0 and -180
+  // If the angle is less than -180, add 360 to make it between 0 and 180
+  if (error > 180)
+    error = error - 360;
+  else if (error < -180)
+    error = error + 360;
+
   float Wz = (kP_Wz * error);
   MotorWrite(0, 0, Wz);
 
