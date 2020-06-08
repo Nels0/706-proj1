@@ -14,35 +14,34 @@
  *  o - IR, # - fan/servo/phototransistors, = - sonar
  */ 
 
-// TODO - implement error for GetServoAngle function
-// TODO - change fanServoPin
-// TODO - change fanPin
-// TODO - Add DriveToFire algorithm
-// TODO - Add fire detection to the repositioning state in the scanning sm
-
 // ======================== Enums =========================
-enum RUNNING_SM {
+// Running FSM: Used for setup and running other FSMs
+enum RUNNING_SM { 
   INITIALISING,
   RUNNING,
   STOPPED
 };
 
-enum FINISHED_SM {
+// Finished FSM: Used to stop robot when 2 fires are put out
+enum FINISHED_SM { 
   NO_ACTION_FINISHED,
   FINISHED  
 };
 
+// Driving FSM: Used to move the robot towards the fire
 enum DRIVING_SM {
   NO_ACTION_DRIVING,
   DRIVING
 };
 
+// Extinguishing FSM: used to operate the fan and servo
 enum EXTINGUISHING_SM {
   NO_ACTION_EXTINGUISHING,
   ALIGNING,
   EXTINGUISHING
 };
 
+// Scanning FSM: Used to locate a fire
 enum SCANNING_SM {
   NO_ACTION_SCANNING,
   SCANNING,
@@ -50,7 +49,7 @@ enum SCANNING_SM {
 };
 
 // =================== Pin assignments ====================
-//Motors
+// Motors
 const byte motor1Pin = 46;
 const byte motor3Pin = 47;
 const byte motor4Pin = 50;
@@ -87,8 +86,11 @@ HardwareSerial *SerialCom;
 
 // Controller gains
 float kP_servoAngle = 0.001f;
+float kP_Wz = 0.02;
+float kP_Vx = 0.1;
+float kP_Vy = 0.1;
 
-// Motors
+// Robot features
 float omegaToPulse = 21.3f;
 float L1 = 7.5f; // Distance from centre to front axe
 float L2 = 8.5f; // Distance from centre to left/right wheen centres
@@ -98,7 +100,7 @@ int minPulseValue = 90;
 int minServoPulseValue = 10;
 int maxServoPulseValue = 600;
 
-// State machines
+// Initial states
 RUNNING_SM runningState = INITIALISING;
 FINISHED_SM finishedState = NO_ACTION_FINISHED;
 DRIVING_SM drivingState = NO_ACTION_DRIVING;
@@ -110,7 +112,7 @@ float irFrontLeft = 0;
 float irFrontRight = 0;
 float irSideLeft = 0;
 float irSideRight = 0;
-float irFrontLeftBuffer[BUFFERLENGTH];
+float irFrontLeftBuffer[BUFFERLENGTH]; // Used for average filtering
 float irFrontRightBuffer[BUFFERLENGTH];
 float irSideLeftBuffer[BUFFERLENGTH];
 float irSideRightBuffer[BUFFERLENGTH];
@@ -120,10 +122,10 @@ int irSideLeftidx = 0;
 int irSideRightidx = 0;
 
 // Track related
-int firesPutOut = 0;
-bool fireFound = false;
-bool startSearching = true; 
-bool startFireFighting = false;
+int firesPutOut = 0; // Used to transition in the Finished FSM
+bool fireFound = false; // Pulse signal: used to transition in the Driving FSM
+bool startSearching = true; // Pulse signal: used to transition in the Scanning FSM
+bool startFireFighting = false; // Pulse signal: used to transition in the Extinguishing FSM
 float repositionSpeed = 150;
 float searchDistanceThreshold = 20;
 
@@ -147,21 +149,14 @@ float gyroZeroVoltage = 0;
 float gyroSensitivity = 0.0070;
 float rotationThreshold = 1;
 float currentAngle = 0;
+float desiredAngle;
 
 // Sonar
 int lastPing = 0;
 int sonaridx = 0;
-float sonarBuffer[BUFFERLENGTH];
+float sonarBuffer[BUFFERLENGTH]; // Used for average filtering
 float sonarDistance = 999;
 long sonarRiseMicros;
-
-// Rotation
-float kP_Wz2 = 0.02;
-
-// Drive
-float Vx_Kp = 0.1;
-float Vy_Kp = 0.1;
-float photoError = 0;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -171,13 +166,13 @@ void setup() {
 
 void loop() {
   switch (runningState) {
-  case INITIALISING:
+  case INITIALISING: // Used to setup sensors and motors
     runningState = Initialising();
     break;
-  case RUNNING:   
+  case RUNNING: // Used to operate FSMs
     runningState = Running();
     break;
-  case STOPPED:
+  case STOPPED: // Used to turn off motors and for battery safety
     runningState =  Stopped();
     break;
   }
@@ -188,7 +183,7 @@ void FinishedRun() {
   switch (finishedState) {
     case NO_ACTION_FINISHED:
       if (firesPutOut == 2)
-        finishedState = FINISHED;
+        finishedState = FINISHED; // State transition: NO_ACTION_FINISHED -> FINISHED
       break;
     case FINISHED:
       MotorWrite(0, 0, 0);
@@ -200,7 +195,7 @@ void DrivingRun() {
   switch (drivingState) {
     case NO_ACTION_DRIVING:
       if (fireFound) {
-        drivingState = DRIVING;
+        drivingState = DRIVING; // State transition: NO_ACTION_DRIVING -> DRIVING
         fireFound = false;
       }
       break;
@@ -214,7 +209,7 @@ void ExtinguishRun(float deltaTime) {
     switch (extinguishingState) {
     case NO_ACTION_EXTINGUISHING:
       if (startFireFighting)
-        extinguishingState = ALIGNING;
+        extinguishingState = ALIGNING; // State transition: NO_ACTION_EXTINGUISHING -> ALIGNING
         startFireFighting = false;
       break;
     case ALIGNING:
@@ -230,7 +225,8 @@ void ScanningRun(float deltaTime) {
   switch (scanningState) {
     case NO_ACTION_SCANNING:
       if (startSearching)
-        scanningState = SCANNING;
+        scanningState = SCANNING; // State transition: NO_ACTION_SCANNING -> SCANNING
+        desiredAngle = currentAngle + 270; // 360 - 90 as our sensors cover ~90 deg
         startSearching = false;
       break;
     case SCANNING:
@@ -245,7 +241,6 @@ void ScanningRun(float deltaTime) {
 // =================== State functions ========================
 RUNNING_SM Initialising() {
   EnableMotors();
-  // TODO
   SetupIR(irFrontLeftPin, irFrontLeftBuffer);  
   SetupIR(irFrontRightPin, irFrontRightBuffer);
   SetupIR(irSideLeftPin, irSideLeftBuffer);  
@@ -261,6 +256,7 @@ RUNNING_SM Running() {
   unsigned int deltaTime = millis() - lastMillis;
   if (deltaTime >= loopTime) {
     lastMillis = millis();
+    // Running all the state machines
     FinishedRun();
     DrivingRun();
     ExtinguishRun(deltaTime);
@@ -298,20 +294,22 @@ RUNNING_SM Stopped() {
 DRIVING_SM DriveToFire() {
   float Vy = 0;
   float Vx = 0;
-  // align to the fire
-  // TO DO: determine threshold values and fireDistance
-  photoError = fireDistance - Sat2(photoMinDistance, fireDistance, 0); 
-  float Wz = kP_Wz2 * photoError;
+  // Align to the fire
+  // TODO: determine threshold values and fireDistance
+  float photoError = fireDistance - Sat2(photoMinDistance, fireDistance, 0); 
+  float Wz = kP_Wz * photoError;
 
-  if (photoMinDistance > 40) { // not close enough to fire
-      Vy = Sat2(max(irFrontRight, irFrontLeft) * Vy_Kp, 30,0); // drive forward
-    if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
-      Vx = Vx_Kp * (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2); // nelson pls help
+  if (photoMinDistance > 40) { // Not close enough to fire
+      Vy = Sat2(max(irFrontRight, irFrontLeft) * kP_Vy, 30,0); // Set forward velocity
+    if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // Front sensors detect obstacle
+      // Vx is mainly controlled by the front sensors, strafing right and left. If the robot comes close
+      // to the wall, the side sensors will contribute to control. Otherwise, they are insignificant
+      Vx = kP_Vx * (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
     } 
   }
-  else { // close to fire
-    startFireFighting = true;
-    return NO_ACTION_DRIVING;
+  else { // Close to fire
+    startFireFighting = true; // Send startFireFighting pulse
+    return NO_ACTION_DRIVING; // State transition: DRIVING -> NO_ACTION_DRIVING
   }
   MotorWrite(Vx,Vy,Wz);
   return DRIVING;
@@ -325,13 +323,12 @@ EXTINGUISHING_SM RunFan() {
     startTime = millis(); 
   }
   // Stops fan once it has been turned on for 10s
-  //TODO: change to detect whether the fire is out (i.e photoavg < threshold)
   if (millis() - startTime >= fanOnTime) {
     digitalWrite(fanPin, LOW);
-    startSearching = true; 
+    startSearching = true; // Send startSearching pulse
     fanStartingTimeMeasured = false; 
     firesPutOut++;
-    return NO_ACTION_EXTINGUISHING; 
+    return NO_ACTION_EXTINGUISHING; // State transition: EXTINGUISHING -> NO_ACTION_EXTINGUISHING
   }
   return EXTINGUISHING; 
 }
@@ -340,30 +337,30 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
   float controllerOutput = FanAlignController(deltaTime);
   ServoWrite(controllerOutput); 
   if (controllerOutput <= fanAngleThreshold) {
-    return EXTINGUISHING; 
+    return EXTINGUISHING; // State transition: ALIGNING -> EXTINGUISHING
   }
   return ALIGNING; 
 }
 
 SCANNING_SM Repositioning() {
   MotorWrite(0, repositionSpeed, 0);
+  // The robot will drive forward to reposition, unless an obstacle is detected
+  // TODO: Add IR sensors to here as well
   if (sonarDistance <= searchDistanceThreshold) {
     scanningState = SCANNING; 
   }
 }
 
 SCANNING_SM Scanning(int deltaTime) {
-  // This needs to be changed, because it needs to be current angle + 270
-  float desiredAngle = 270; // 360 - 90 as our sensors cover ~90 deg
   float error = desiredAngle - currentAngle;
-  float Wz = (kP_Wz2 * error);
+  float Wz = (kP_Wz * error);
   MotorWrite(0, 0, Wz);
-  // 1000 Arbuitary value
-  if (photoMinDistance <= 60) { 
+
+  if (photoMinDistance <= 60) { // TODO: Make this a global threshold up the top
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
-  if (abs(error) < 0.5 && Wz < 5) { // has completed a full scan
+  if (abs(error) < 0.5 && Wz < 5) { // Has completed a full scan
     return REPOSITION;
   }
   return SCANNING;
@@ -496,20 +493,20 @@ void echoRead(){
 
 void ReadPhotoTransistors() {
   // Read voltage values
-  float Voltage1 = analogRead(photoTransistor1);  
-  float Voltage2 = analogRead(photoTransistor2);
-  float Voltage3 = analogRead(photoTransistor3);
-  float Voltage4 = analogRead(photoTransistor4);
+  float v1 = analogRead(photoTransistor1);  
+  float v2 = analogRead(photoTransistor2);
+  float v3 = analogRead(photoTransistor3);
+  float v4 = analogRead(photoTransistor4);
 
   // Convert to distance from light using fitted curve
   // Used distance because is not a linear ratio
-  photoTransistorDistance1 = -26.3*(Voltage1*Voltage1*Voltage1) + 295.3*(Voltage1*Voltage1) - 1103.4*Voltage1 + 1413.9;
-  photoTransistorDistance2 = -26.3*(Voltage2*Voltage2*Voltage2) + 295.3*(Voltage2*Voltage2) - 1103.4*Voltage2 + 1413.9;
-  photoTransistorDistance3 = -26.3*(Voltage3*Voltage3*Voltage3) + 295.3*(Voltage3*Voltage3) - 1103.4*Voltage3 + 1413.9;
-  photoTransistorDistance4 = -26.3*(Voltage4*Voltage4*Voltage4) + 295.3*(Voltage4*Voltage4) - 1103.4*Voltage4 + 1413.9;
+  photoTransistorDistance1 = -26.3*(pow(v1,3)) + 295.3*(pow(v1, 2)) - 1103.4*v1 + 1413.9;
+  photoTransistorDistance2 = -26.3*(pow(v2,3)) + 295.3*(pow(v2, 2)) - 1103.4*v2 + 1413.9;
+  photoTransistorDistance3 = -26.3*(pow(v3,3)) + 295.3*(pow(v3, 2)) - 1103.4*v3 + 1413.9;
+  photoTransistorDistance4 = -26.3*(pow(v4,3)) + 295.3*(pow(v4, 2)) - 1103.4*v4 + 1413.9;
 
   // Used for multiple FSMs
-  photoMinDistance = minValue(); 
+  photoMinDistance = min(min(photoTransistorDistance1, photoTransistorDistance2), min(photoTransistorDistance2, photoTransistorDistance4));
 }
 
 // ================== Actuation functions =======================
@@ -560,26 +557,6 @@ int Sat2(int value, int maxValue, int minValue) {
   else 
     return value; 
 }
-
-float minValue() {
-  if ((photoTransistorDistance1 < photoTransistorDistance2) && (photoTransistorDistance1 < photoTransistorDistance3) &&
-  (photoTransistorDistance1 < photoTransistorDistance4)) {
-    return photoTransistorDistance1;
-  }
-  if ((photoTransistorDistance2 < photoTransistorDistance1) && (photoTransistorDistance2 < photoTransistorDistance3) &&
-  (photoTransistorDistance2 < photoTransistorDistance4)) {
-    return photoTransistorDistance2;
-  }
-  if ((photoTransistorDistance3 < photoTransistorDistance1) && (photoTransistorDistance3 < photoTransistorDistance2) &&
-   (photoTransistorDistance3 < photoTransistorDistance4)) {
-     return photoTransistorDistance3;
-   }
-  if ((photoTransistorDistance4 < photoTransistorDistance1) && (photoTransistorDistance4 < photoTransistorDistance2) &&
-   (photoTransistorDistance4 < photoTransistorDistance3)) {
-     return photoTransistorDistance4;
-  }
-}
-
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
   return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
