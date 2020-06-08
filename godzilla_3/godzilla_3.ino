@@ -1,4 +1,4 @@
-// ========================================================================
+ // ========================================================================
 // Defines and includes
 #include <Servo.h>
 #define BUFFERLENGTH 20
@@ -133,6 +133,7 @@ float photoTransistorDistance2;
 float photoTransistorDistance3;
 float photoTransistorDistance4; 
 float photoMinDistance;
+float fireDistance;
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -156,6 +157,11 @@ long sonarRiseMicros;
 
 // Rotation
 float kP_Wz2 = 0.02;
+
+// Drive
+float Vx_Kp = 0.1;
+float Vy_Kp = 0.1;
+float photoError = 0;
 
 // ================== Arduino functions ===================
 void setup() {
@@ -290,42 +296,25 @@ RUNNING_SM Stopped() {
 }
 
 DRIVING_SM DriveToFire() {
-  // move forward
+  float Vy = 0;
+  float Vx = 0;
+  // align to the fire
+  // TO DO: determine threshold values and fireDistance
+  photoError = fireDistance - Sat2(photoMinDistance, fireDistance, 0); 
+  float Wz = kP_Wz2 * photoError;
 
-  //point at fire
-  //drive forward
-  //drive sideways as a function of the difference between front distance sensors
-  //don't crash into side obstacles (using side sensors to control sideways velocity)
-
-
-//Concept:
-
-  // point at the fire
-  // Wz = kP_Wz2 * photoError;
-
-  // Forward velocity controller like the last one
-  // Vy = sat2(max(IRdistance) * KP)
-  
-  // move sideways based on obstacles, but also it has th 1/side^2 terms which will overwhelm if it gets laterally close to something
-  // Vx = kp * (irfrontright - irFrontLeft) + 1/(irLeft ^ 2) - 1/(irRight ^ 2)
-  // maybe we shouldn't avoid obstacles when we're close to the fire (i.e above a certain Phototransitior brightness) or we'll avoid the candle
-  // add an if(luminance > threshold) to stop avoiding and then if(luminance > threshold && frontdist < threshold) to start firefighting
-  
   if (photoMinDistance > 40) { // not close enough to fire
+      Vy = Sat2(max(irFrontRight, irFrontLeft) * Vy_Kp, 30,0); // drive forward
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // front sensors detect obstacle
-      if (irFrontRight > irFrontLeft) {
-         // move right for 10ccm
-      } else {
-        // move left for 10cm
-      }
-    } else {
-      return DRIVING;
-    }
+      Vx = Vx_Kp * (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2); // nelson pls help
+    } 
   }
-  else {
+  else { // close to fire
     startFireFighting = true;
+    return NO_ACTION_DRIVING;
   }
-  
+  MotorWrite(Vx,Vy,Wz);
+  return DRIVING;
 }
 
 EXTINGUISHING_SM RunFan() {
@@ -383,10 +372,9 @@ SCANNING_SM Scanning(int deltaTime) {
 // =================== Controllers ============================
 // Servo angle controller
 float FanAlignController(int deltaTime) {
-  float error = 0;
 
   // Weighted error, more sensitive to phototransistor 2 and 3 misallignment to fire
-  float error = phototransistorDistance1 - phototransistorDistance4 + 2*photoTransistorDistance2 - 2*photoTransistorDistance3; 
+  float error = photoTransistorDistance1 - photoTransistorDistance4 + 2*photoTransistorDistance2 - 2*photoTransistorDistance3; 
 
   return kP_servoAngle * error;
 }
@@ -591,6 +579,7 @@ float minValue() {
      return photoTransistorDistance4;
   }
 }
+
 
 int KinematicCalc(int Vx, int Vy, int Wz) {
   return (int)((Vx + Vy + Wz*(L1 + L2)) / Rw);
