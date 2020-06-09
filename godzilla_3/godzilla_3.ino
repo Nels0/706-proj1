@@ -134,8 +134,6 @@ float photoTransistorDistance1;
 float photoTransistorDistance2;
 float photoTransistorDistance3;
 float photoTransistorDistance4; 
-float photoMinDistance;
-float fireDistance;
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -295,11 +293,11 @@ DRIVING_SM DriveToFire() {
   float Vy = 0;
   float Vx = 0;
   // Align to the fire
-  // TODO: determine threshold values and fireDistance
-  float photoError = fireDistance - Sat2(photoMinDistance, fireDistance, 0); 
+  float photoError = photoTransistorDistance2 - photoTransistorDistance3; // TODO - are these the right phototransistors
   float Wz = kP_Wz * photoError;
 
-  if (photoMinDistance > 40) { // Not close enough to fire
+  // TODO: determine threshold values
+  if (photoMaxDistance > 40) { // Not close enough to fire
       Vy = Sat2(max(irFrontRight, irFrontLeft) * kP_Vy, 30,0); // Set forward velocity
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // Front sensors detect obstacle
       // Vx is mainly controlled by the front sensors, strafing right and left. If the robot comes close
@@ -507,13 +505,22 @@ void ReadPhotoTransistors() {
 
   // Convert to distance from light using fitted curve
   // Used distance because is not a linear ratio
-  photoTransistorDistance1 = -26.3*(pow(v1,3)) + 295.3*(pow(v1, 2)) - 1103.4*v1 + 1413.9;
-  photoTransistorDistance2 = -26.3*(pow(v2,3)) + 295.3*(pow(v2, 2)) - 1103.4*v2 + 1413.9;
-  photoTransistorDistance3 = -26.3*(pow(v3,3)) + 295.3*(pow(v3, 2)) - 1103.4*v3 + 1413.9;
-  photoTransistorDistance4 = -26.3*(pow(v4,3)) + 295.3*(pow(v4, 2)) - 1103.4*v4 + 1413.9;
+  photoTransistorDistance1 = TransistorDistance(v1);
+  photoTransistorDistance2 = TransistorDistance(v2);
+  photoTransistorDistance3 = TransistorDistance(v3);
+  photoTransistorDistance4 = TransistorDistance(v4);
+}
 
-  // Used for multiple FSMs
-  photoMinDistance = min(min(photoTransistorDistance1, photoTransistorDistance2), min(photoTransistorDistance2, photoTransistorDistance4));
+float TransistorDistance(float voltage) {
+  return -26.3*(pow(voltage,3)) + 295.3*(pow(voltage, 2)) - 1103.4*voltage + 1413.9;
+}
+
+float photoMinDistance() {
+  min(min(photoTransistorDistance1, photoTransistorDistance2), min(photoTransistorDistance2, photoTransistorDistance4));
+}
+
+float photoMaxDistance() {
+  max(max(photoTransistorDistance1, photoTransistorDistance2), max(photoTransistorDistance2, photoTransistorDistance4));
 }
 
 // ================== Actuation functions =======================
