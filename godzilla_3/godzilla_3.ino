@@ -61,8 +61,6 @@ Servo motor2;
 Servo motor3;
 Servo motor4;
 Servo fanServo;
-//Fan
-const byte fanPin = 53; // TODO - remove, there is fanServoPin and fanMosfetPin
 // IR
 const byte irFrontLeftPin = A8;
 const byte irFrontRightPin = A9;
@@ -314,7 +312,7 @@ DRIVING_SM DriveToFire() {
 }
 
 EXTINGUISHING_SM RunFan() {
-  digitalWrite(fanPin, HIGH);
+  digitalWrite(fanMosfetPin, HIGH);
   // Reference time is when extinguishing state first starts
   if (!fanStartingTimeMeasured) {
     fanStartingTimeMeasured = true; 
@@ -322,7 +320,7 @@ EXTINGUISHING_SM RunFan() {
   }
   // Stops fan once it has been turned on for 10s
   if (millis() - startTime >= fanOnTime) {
-    digitalWrite(fanPin, LOW);
+    digitalWrite(fanMosfetPin, LOW);
     startSearching = true; // Send startSearching pulse
     fanStartingTimeMeasured = false; 
     firesPutOut++;
