@@ -307,7 +307,7 @@ DRIVING_SM DriveToFire() {
   float Wz = kP_Wz * photoError;
 
   // TODO: determine threshold values
-  if (photoMaxDistance > 40) { // Not close enough to fire
+  if (PhotoMaxDistance() > 40) { // Not close enough to fire
       Vy = Sat2(max(irFrontRight, irFrontLeft) * kP_Vy, 30,0); // Set forward velocity
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // Front sensors detect obstacle
       // Vx is mainly controlled by the front sensors, strafing right and left. If the robot comes close
@@ -371,7 +371,7 @@ SCANNING_SM Scanning(int deltaTime) {
   float Wz = (kP_Wz * error);
   MotorWrite(0, 0, Wz);
 
-  if (photoMinDistance <= 60) { // TODO: Make this a global threshold up the top
+  if (PhotoMinDistance() <= 60) { // TODO: Make this a global threshold up the top
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
@@ -531,12 +531,12 @@ void ReadPhotoTransistor(int photoPin, float &value, float irBuffer[], int &idx)
   }
 }
 
-float photoMinDistance() {
-  min(min(photoTransistorDistance1, photoTransistorDistance2), min(photoTransistorDistance2, photoTransistorDistance4));
+float PhotoMinDistance() {
+  return min(min(photoTransistorDistance1, photoTransistorDistance2), min(photoTransistorDistance2, photoTransistorDistance4));
 }
 
-float photoMaxDistance() {
-  max(max(photoTransistorDistance1, photoTransistorDistance2), max(photoTransistorDistance2, photoTransistorDistance4));
+float PhotoMaxDistance() {
+  return max(max(photoTransistorDistance1, photoTransistorDistance2), max(photoTransistorDistance2, photoTransistorDistance4));
 }
 
 // ================== Actuation functions =======================
