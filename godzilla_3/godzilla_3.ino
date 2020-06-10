@@ -132,6 +132,14 @@ float photoTransistorDistance1;
 float photoTransistorDistance2;
 float photoTransistorDistance3;
 float photoTransistorDistance4; 
+float photoBuffer1[BUFFERLENGTH];
+float photoBuffer2[BUFFERLENGTH];
+float photoBuffer3[BUFFERLENGTH];
+float photoBuffer4[BUFFERLENGTH];
+int photoIdx1 = 0;
+int photoIdx2 = 0;
+int photoIdx3 = 0;
+int photoIdx4 = 0;
 
 // Fan
 bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time the fan is first turned on
@@ -241,6 +249,10 @@ RUNNING_SM Initialising() {
   SetupIR(irFrontRightPin, irFrontRightBuffer);
   SetupIR(irSideLeftPin, irSideLeftBuffer);  
   SetupIR(irSideRightPin, irSideRightBuffer);
+  SetupPhotoTransistor(photoTransistor1, photoBuffer1);
+  SetupPhotoTransistor(photoTransistor2, photoBuffer2);
+  SetupPhotoTransistor(photoTransistor3, photoBuffer3);
+  SetupPhotoTransistor(photoTransistor4, photoBuffer4);
   SetupGyro();
   SetupSonar();
   return RUNNING;
@@ -397,6 +409,13 @@ void SetupSonar(){
   PingSonar();
 }
 
+void SetupPhotoTransistor(byte photoPin, float photoBuffer[]) {
+  pinMode(photoPin, INPUT);
+  for (int i = 0; i < BUFFERLENGTH - 1; i++) {
+    photoBuffer[i] = 0;
+  }
+}
+
 void SetupGyro() {
   int i;
   int gyroValue;
@@ -419,8 +438,11 @@ void ReadSensors(int deltaTime){
   ReadIR(irFrontRightPin, irFrontRight, irFrontRightBuffer, irFrontRightidx);
   ReadIR(irSideLeftPin, irSideLeft, irSideLeftBuffer, irSideLeftidx);
   ReadIR(irSideRightPin, irSideRight, irSideRightBuffer, irSideRightidx);
+  ReadPhotoTransistor(photoTransistor1, photoTransistorDistance1, photoBuffer1, photoIdx1);
+  ReadPhotoTransistor(photoTransistor2, photoTransistorDistance2, photoBuffer2, photoIdx2);
+  ReadPhotoTransistor(photoTransistor3, photoTransistorDistance3, photoBuffer3, photoIdx3);
+  ReadPhotoTransistor(photoTransistor4, photoTransistorDistance4, photoBuffer4, photoIdx4);
   PingSonar();
-  ReadPhotoTransistors(); 
 }
 
 void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
@@ -494,23 +516,19 @@ void echoRead(){
   }
 }
 
-void ReadPhotoTransistors() {
-  // Read voltage values
-  float v1 = analogRead(photoTransistor1);  
-  float v2 = analogRead(photoTransistor2);
-  float v3 = analogRead(photoTransistor3);
-  float v4 = analogRead(photoTransistor4);
-
-  // Convert to distance from light using fitted curve
-  // Used distance because is not a linear ratio
-  photoTransistorDistance1 = TransistorDistance(v1);
-  photoTransistorDistance2 = TransistorDistance(v2);
-  photoTransistorDistance3 = TransistorDistance(v3);
-  photoTransistorDistance4 = TransistorDistance(v4);
-}
-
-float TransistorDistance(float voltage) {
-  return -26.3*(pow(voltage,3)) + 295.3*(pow(voltage, 2)) - 1103.4*voltage + 1413.9;
+void ReadPhotoTransistor(int photoPin, float &value, float irBuffer[], int &idx) {
+  // NOTE: All "values" in buffer are divided by buffer length 
+  float v = analogRead(photoPin);
+  float newValue = (-26.3*(pow(v,3)) + 295.3*(pow(v, 2)) - 1103.4*v + 1413.9) / BUFFERLENGTH;
+  // n.b first 5 values will be off due to zero-initialisation
+  value -= irBuffer[idx]; // Subtract last number from average
+  value += newValue; // Add new number to average
+  irBuffer[idx] = newValue; // Overwrite new number in buffer
+  if (idx < BUFFERLENGTH - 1){ // Increment buffer index
+    idx++;
+  } else {
+    idx = 0;
+  }
 }
 
 float photoMinDistance() {
