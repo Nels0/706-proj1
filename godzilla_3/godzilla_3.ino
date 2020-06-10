@@ -85,8 +85,14 @@ HardwareSerial *SerialCom;
 // Controller gains
 float kP_servoAngle = 0.001f;
 float kP_Wz = 0.02;
-float kP_Vx = 0.1;
+float kI_Wz = 0.001f;
+float Wz_windup = 20;
 float kP_Vy = 0.1;
+float kI_Vy = 0.001f;
+float Vy_windup = 10;
+float kP_Vx = 0.1;
+float kI_Vx = 0.001f;
+float Vx_windup = 10;
 
 // Robot features
 float omegaToPulse = 21.3f;
@@ -195,7 +201,7 @@ void FinishedRun() {
   }
 }
 
-void DrivingRun() {
+void DrivingRun(float deltaTime) {
   switch (drivingState) {
     case NO_ACTION_DRIVING:
       if (fireFound) {
@@ -204,7 +210,7 @@ void DrivingRun() {
       }
       break;
     case DRIVING:
-      drivingState = DriveToFire();
+      drivingState = DriveToFire(deltaTime);
       break;
   }
 }
@@ -266,7 +272,7 @@ RUNNING_SM Running() {
     lastMillis = millis();
     // Running all the state machines
     FinishedRun();
-    DrivingRun();
+    DrivingRun(deltaTime);
     ExtinguishRun(deltaTime);
     ScanningRun(deltaTime);
   }
@@ -299,20 +305,34 @@ RUNNING_SM Stopped() {
   return STOPPED;
 }
 
-DRIVING_SM DriveToFire() {
+DRIVING_SM DriveToFire(float deltaTime) {
+  static float I_Wz;
+  static float I_Vx;
+  static float I_Vy;
   float Vy = 0;
   float Vx = 0;
   // Align to the fire
   float photoError = photoTransistorDistance2 - photoTransistorDistance3; // TODO - are these the right phototransistors
-  float Wz = kP_Wz * photoError;
+  if(abs(I_Wz) < Wz_windup) // Integral component of controller
+    I_Wz += photoError * deltaTime/1000;
+  float Wz = kP_Wz * photoError + kI_Wz * I_Wz;
 
   // TODO: determine threshold values
   if (PhotoMaxDistance() > 40) { // Not close enough to fire
-      Vy = Sat2(max(irFrontRight, irFrontLeft) * kP_Vy, 30,0); // Set forward velocity
+    float yError = 9.5 - sonarDistance;
+
+    if (abs(I_Vy) < Vy_windup) // Integral part of controller
+      I_Vy += yError * deltaTime/1000;
+    Vy = kP_Vy * yError + kI_Vy * I_Vy;
+
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // Front sensors detect obstacle
       // Vx is mainly controlled by the front sensors, strafing right and left. If the robot comes close
       // to the wall, the side sensors will contribute to control. Otherwise, they are insignificant
-      Vx = kP_Vx * (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
+      float xError = (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
+
+      if(abs(I_Vx) < Vx_windup) // Intergral component of controller
+        I_Vx += xError * deltaTime/1000;
+      Vx = kP_Wz * xError + kI_Wz * I_Wz;
     } 
   }
   else { // Close to fire
