@@ -38,7 +38,8 @@ enum DRIVING_SM {
 enum EXTINGUISHING_SM {
   NO_ACTION_EXTINGUISHING,
   ALIGNING,
-  EXTINGUISHING
+  EXTINGUISHING,
+  REALIGNING
 };
 
 // Scanning FSM: Used to locate a fire
@@ -152,6 +153,7 @@ bool fanStartingTimeMeasured = false; // Used to take a timestamp of the time th
 unsigned int startTime;
 float fanOnTime = 10000; // ms
 float fanAngleThreshold = 0.5;
+float resetServoTime = 0; // Used to realign the fan for 2 seconds
 
 // Gyrosope 
 float gyroSupplyVoltage = 5;
@@ -227,6 +229,9 @@ void ExtinguishRun(float deltaTime) {
       break;
     case EXTINGUISHING:
       extinguishingState = RunFan();
+      break;
+    case REALIGNING:
+      extinguishingState = ResetFanServo();
       break;
   }
 }
@@ -312,12 +317,11 @@ DRIVING_SM DriveToFire(float deltaTime) {
   float Vy = 0;
   float Vx = 0;
   // Align to the fire
-  float photoError = photoTransistorDistance2 - photoTransistorDistance3; // TODO - are these the right phototransistors
+  float photoError = photoTransistorDistance2 - photoTransistorDistance3;
   if(abs(I_Wz) < Wz_windup) // Integral component of controller
     I_Wz += photoError * deltaTime/1000;
   float Wz = kP_Wz * photoError + kI_Wz * I_Wz;
 
-  // TODO: determine threshold values
   if (PhotoMaxDistance() > 40) { // Not close enough to fire
     float yError = 9.5 - sonarDistance;
 
@@ -356,9 +360,18 @@ EXTINGUISHING_SM RunFan() {
     startSearching = true; // Send startSearching pulse
     fanStartingTimeMeasured = false; 
     firesPutOut++;
-    return NO_ACTION_EXTINGUISHING; // State transition: EXTINGUISHING -> NO_ACTION_EXTINGUISHING
+    resetServoTime = millis();
+    return REALIGNING; // State transition: EXTINGUISHING -> REALIGNING
   }
   return EXTINGUISHING; 
+}
+
+EXTINGUISHING_SM ResetFanServo() {
+  while (millis () < resetServoTime + 2000) { // servo will be set to zero angle for 2 seconds
+    ServoWrite(0);
+    return REALIGNING;
+  }
+  return NO_ACTION_EXTINGUISHING; // State transition: REALIGNING -> NO_ACTION_EXTINGUISHING
 }
 
 EXTINGUISHING_SM AlignFan(float deltaTime) {
@@ -373,7 +386,6 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
 SCANNING_SM Repositioning() {
   MotorWrite(0, repositionSpeed, 0);
   // The robot will drive forward to reposition, unless an obstacle is detected
-  // TODO: Add IR sensors to here as well
   if (sonarDistance <= searchDistanceThreshold) {
     scanningState = SCANNING; 
   }
@@ -391,7 +403,7 @@ SCANNING_SM Scanning(int deltaTime) {
   float Wz = (kP_Wz * error);
   MotorWrite(0, 0, Wz);
 
-  if (PhotoMinDistance() <= 60) { // TODO: Make this a global threshold up the top
+  if (PhotoMinDistance() <= 60) {
     fireFound = true;
     return NO_ACTION_SCANNING; 
   }
@@ -522,7 +534,7 @@ void echoRead(){
       float newValue = ((signalDuration/2.0)*0.0343 + 7.5) / BUFFERLENGTH;
       // Convert to distance by multiplying by speed of sound, 
       // accounting for returned wave by division of 2
-      // offset by 7.5cm to account for sensor positioning on robot TODO: check offset
+      // offset by 7.5cm to account for sensor positioning on robot
       // Filter:
       sonarDistance -= sonarBuffer[sonaridx]; // Subtract last number from average
       sonarDistance += newValue; // Add new number to average
