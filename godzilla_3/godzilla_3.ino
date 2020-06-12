@@ -323,7 +323,11 @@ DRIVING_SM DriveToFire(float deltaTime) {
   float Wz = kP_Wz * photoError + kI_Wz * I_Wz;
 
   if (PhotoMaxDistance() > 40) { // Not close enough to fire
-    float yError = 9.5 - sonarDistance;
+    float sonarError = 9.5 - sonarDistance;
+    float leftIRError = 9.5 - irFrontLeft;
+    float rightIRError = 9.5 - irFrontRight;
+    // Using the smallest error to determine control to prevent corner clipping
+    float yError = min(sonarError, min(leftIRError, rightIRError));
 
     if (abs(I_Vy) < Vy_windup) // Integral part of controller
       I_Vy += yError * deltaTime/1000;
