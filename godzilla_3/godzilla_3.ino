@@ -327,20 +327,20 @@ DRIVING_SM DriveToFire(float deltaTime) {
     float leftIRError = 9.5 - irFrontLeft;
     float rightIRError = 9.5 - irFrontRight;
     // Using the smallest error to determine control to prevent corner clipping
-    float yError = min(sonarError, min(leftIRError, rightIRError));
+    float xError = min(sonarError, min(leftIRError, rightIRError));
 
-    if (abs(I_Vy) < Vy_windup) // Integral part of controller
-      I_Vy += yError * deltaTime/1000;
-    Vy = kP_Vy * yError + kI_Vy * I_Vy;
+    if (abs(I_Vx) < Vx_windup) // Integral part of controller
+      I_Vx += xError * deltaTime/1000;
+    Vx = kP_Vx * xError + kI_Vx * I_Vx;
 
     if ((irFrontRight < 20) || (irFrontLeft < 20)) {  // Front sensors detect obstacle
-      // Vx is mainly controlled by the front sensors, strafing right and left. If the robot comes close
+      // Vy is mainly controlled by the front sensors, strafing right and left. If the robot comes close
       // to the wall, the side sensors will contribute to control. Otherwise, they are insignificant
-      float xError = (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
+      float yError = (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
 
-      if(abs(I_Vx) < Vx_windup) // Integral component of controller
-        I_Vx += xError * deltaTime/1000;
-      Vx = kP_Wz * xError + kI_Wz * I_Wz;
+      if(abs(I_Vy) < Vy_windup) // Integral component of controller
+        I_Vy += yError * deltaTime/1000;
+      Vy = kP_Wy * yError + kI_Wy * I_Wy;
     } 
   }
   else { // Close to fire
@@ -388,7 +388,7 @@ EXTINGUISHING_SM AlignFan(float deltaTime) {
 }
 
 SCANNING_SM Repositioning() {
-  MotorWrite(0, repositionSpeed, 0);
+  MotorWrite(repositionSpeed, 0, 0);
   // The robot will drive forward to reposition, unless an obstacle is detected
   if (sonarDistance <= searchDistanceThreshold) {
     scanningState = SCANNING; 
