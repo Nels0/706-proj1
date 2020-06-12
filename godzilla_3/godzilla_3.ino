@@ -338,7 +338,7 @@ DRIVING_SM DriveToFire(float deltaTime) {
       // to the wall, the side sensors will contribute to control. Otherwise, they are insignificant
       float xError = (irFrontRight - irFrontLeft) + 1/pow(irSideLeft,2) - 1/pow(irSideRight,2);
 
-      if(abs(I_Vx) < Vx_windup) // Intergral component of controller
+      if(abs(I_Vx) < Vx_windup) // Integral component of controller
         I_Vx += xError * deltaTime/1000;
       Vx = kP_Wz * xError + kI_Wz * I_Wz;
     } 
@@ -496,7 +496,7 @@ void ReadIR(int irPin, float &value, float irBuffer[], int &idx){
 }
 
 void ReadGyro(int deltaTime) {
-    //OoO to preserve precision
+    // Order of operations to preserve precision
   float angularVelocity = (analogRead(gyroPin) - gyroZeroVoltage);
   angularVelocity *= gyroSupplyVoltage / gyroSensitivity / 1023;
   if (angularVelocity >= rotationThreshold || angularVelocity <= -rotationThreshold) {
